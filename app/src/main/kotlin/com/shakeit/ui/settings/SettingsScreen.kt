@@ -17,6 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.BatteryAlert
+import androidx.compose.material.icons.rounded.BatteryFull
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.FlashlightOn
 import androidx.compose.material.icons.rounded.Gesture
@@ -41,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shakeit.R
+import com.shakeit.background.PowerManagerVendor
 import com.shakeit.state.Sensitivity
 import com.shakeit.state.ShakeGesture
 import com.shakeit.state.ShakeItState
@@ -53,11 +56,23 @@ import com.shakeit.ui.components.ShakeItSwitch
 import com.shakeit.ui.theme.ShakeItTheme
 import com.shakeit.ui.theme.ShakeItType
 
+/**
+ * @param batteryUnrestricted whether the system exempts ShakeIT from battery
+ *   optimisation. While that is true there is deliberately nothing to fix, so the
+ *   row shows status text and no button — the user is never pushed into system
+ *   settings they do not need.
+ * @param vendor whose power manager is in charge, which decides which manual
+ *   steps the hint describes; the vendor's auto-start manager has no public
+ *   intent that survives an update, so it can only be explained.
+ */
 @Composable
 fun SettingsScreen(
     state: ShakeItState,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    batteryUnrestricted: Boolean = true,
+    vendor: PowerManagerVendor = PowerManagerVendor.Stock,
+    onOpenBatterySettings: () -> Unit = {},
 ) {
     val colors = ShakeItTheme.colors
     ShakeItScreen(modifier = modifier) {
@@ -190,6 +205,44 @@ fun SettingsScreen(
                 }
                 // Advanced Section
                 SettingsCardGroup {
+                    // The only row here that reports a real platform fact rather
+                    // than a stored preference, so it leads the card.
+                    SettingsControlRow(
+                        icon = if (batteryUnrestricted) Icons.Rounded.BatteryFull
+                        else Icons.Rounded.BatteryAlert,
+                        title = stringResource(R.string.setting_background_reliability),
+                        subtitle = stringResource(
+                            if (batteryUnrestricted) R.string.background_unrestricted
+                            else R.string.background_restricted,
+                        ),
+                    ) {
+                        if (!batteryUnrestricted) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlineButton(
+                                    text = stringResource(R.string.background_open_settings),
+                                    onClick = onOpenBatterySettings,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                                // Named steps for this device's own power manager,
+                                // which the platform will not open for us.
+                                Text(
+                                    text = stringResource(
+                                        when (vendor) {
+                                            PowerManagerVendor.Transsion ->
+                                                R.string.background_vendor_transsion
+                                            PowerManagerVendor.Xiaomi ->
+                                                R.string.background_vendor_xiaomi
+                                            PowerManagerVendor.Stock ->
+                                                R.string.background_vendor_stock
+                                        },
+                                    ),
+                                    style = ShakeItType.finePrint,
+                                    color = colors.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                    SettingsDivider()
                     SettingsControlRow(
                         icon = Icons.Rounded.Build,
                         title = stringResource(R.string.setting_shizuku),

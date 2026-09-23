@@ -52,6 +52,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Coming back from the system battery screen is the only way this answer
+        // changes, and resume is exactly when we arrive back from it.
+        engine.refreshBatteryRestrictions()
+    }
+
     /**
      * Whether the service's notification can actually be seen. Below Android 13
      * there is nothing to ask for; above it, only a grant counts. A refusal that

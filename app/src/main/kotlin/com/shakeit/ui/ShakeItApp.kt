@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
@@ -62,6 +63,13 @@ fun ShakeItApp(
         }
     }
 
+    // Detection health comes from the engine rather than from a stored
+    // preference, because this is the row that has to keep telling the truth when
+    // the device stops delivering samples in the background. Same for the battery
+    // answer, which is re-read on resume and can only change while we are away.
+    val detectionStatus by engine.detectionStatus.collectAsState()
+    val batteryUnrestricted by engine.batteryUnrestricted.collectAsState()
+
     val isDark = when (state.themeMode) {
         ThemeMode.System -> isSystemInDarkTheme()
         ThemeMode.Dark -> true
@@ -94,7 +102,7 @@ fun ShakeItApp(
                     HomeScreen(
                         torchOn = state.torchOn,
                         activations = state.activations,
-                        detectionActive = state.detectionActive,
+                        detectionStatus = detectionStatus,
                         shakeRequest = state.shakeRequest,
                         detectedShake = state.detectedShake,
                         animateBlob = state.screen == ShakeItState.Screen.HOME,
@@ -105,7 +113,13 @@ fun ShakeItApp(
                     )
                 },
                 settings = {
-                    SettingsScreen(state = state, onBack = state::closeSettings)
+                    SettingsScreen(
+                        state = state,
+                        onBack = state::closeSettings,
+                        batteryUnrestricted = batteryUnrestricted,
+                        vendor = engine.battery.vendor,
+                        onOpenBatterySettings = { engine.openBatterySettings() },
+                    )
                 },
             )
         }

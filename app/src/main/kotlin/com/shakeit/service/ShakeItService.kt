@@ -43,19 +43,36 @@ class ShakeItService : Service() {
         super.onCreate()
         engine = (application as ShakeItApplication).engine
         ShakeItNotification.createChannel(this)
-
-        // Idempotent, and called again on every start so a restart by the system
-        // re-arms detection instead of running an empty foreground notification.
-        engine.startDetection()
+        // Detection is armed from onStartCommand, which always follows onCreate
+        // for a started service — one place, so it cannot drift.
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Idempotent, and repeated on every start: if anything ever stopped the
+        // listener while the service lived on, the next start re-arms it rather
+        // than leaving a foreground notification over a dead sensor.
+        engine.startDetection()
         goForeground()
         observeHardware()
 
         // A null intent means the system restarted the service after killing it
         // for memory; detection should come back either way.
         return START_STICKY
+    }
+
+    /**
+     * The user swiped the task away from Recents.
+     *
+     * Nothing here stops the service: `stopWithTask` is false, and on stock
+     * Android a foreground service outlives its task, which is the behaviour the
+     * app is designed around — the activity is disposable, this is not. Some OEM
+     * power managers read a removed task as "shut the app down" regardless, so
+     * detection is re-armed (a no-op when it is already running) and the service
+     * is left alone rather than being torn down politely.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        engine.startDetection()
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
@@ -77,6 +94,7 @@ class ShakeItService : Service() {
             context = this,
             torchOn = engine.torch.torchOn.value,
             covered = engine.covered.value,
+            status = engine.detectionStatus.value,
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
@@ -90,23 +108,28 @@ class ShakeItService : Service() {
     }
 
     /**
-     * Rewrites the notification whenever the torch or the pocket state changes,
-     * which is what makes the notification a truthful status line rather than a
-     * "service is running" placeholder.
+     * Rewrites the notification whenever the torch, the pocket state or the
+     * detector's health changes, which is what makes the notification a truthful
+     * status line rather than a "service is running" placeholder.
      */
     private fun observeHardware() {
         if (stateJob?.isActive == true) return
         val manager = getSystemService<NotificationManager>() ?: return
         stateJob = scope.launch {
-            combine(engine.torch.torchOn, engine.covered) { torchOn, covered ->
-                torchOn to covered
-            }.collect { (torchOn, covered) ->
+            combine(
+                engine.torch.torchOn,
+                engine.covered,
+                engine.detectionStatus,
+            ) { torchOn, covered, status ->
+                Triple(torchOn, covered, status)
+            }.collect { (torchOn, covered, status) ->
                 manager.notify(
                     ShakeItNotification.ID,
                     ShakeItNotification.build(
                         context = this@ShakeItService,
                         torchOn = torchOn,
                         covered = covered,
+                        status = status,
                     ),
                 )
             }

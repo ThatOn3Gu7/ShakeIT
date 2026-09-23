@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shakeit.R
+import com.shakeit.hardware.DetectionStatus
 import com.shakeit.ui.components.IconActionButton
 import com.shakeit.ui.components.ShakeItScreen
 import com.shakeit.ui.theme.ShakeItTheme
@@ -62,7 +63,7 @@ private const val SETTINGS_GLYPH = "\u2699"
 fun HomeScreen(
     torchOn: Boolean,
     activations: Int,
-    detectionActive: Boolean,
+    detectionStatus: DetectionStatus,
     shakeRequest: Int,
     detectedShake: Int,
     animateBlob: Boolean,
@@ -83,7 +84,7 @@ fun HomeScreen(
             HomeHeaderSection(
                 torchOn = torchOn,
                 activations = activations,
-                detectionActive = detectionActive,
+                detectionStatus = detectionStatus,
                 onToggleTheme = onToggleTheme,
                 onOpenSettings = onOpenSettings,
             )
@@ -117,7 +118,7 @@ fun HomeScreen(
 private fun HomeHeaderSection(
     torchOn: Boolean,
     activations: Int,
-    detectionActive: Boolean,
+    detectionStatus: DetectionStatus,
     onToggleTheme: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
@@ -159,13 +160,24 @@ private fun HomeHeaderSection(
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // Reports what the detector is really doing, not what was asked for.
+            // A stalled detector is the one state this row exists to surface: the
+            // service is alive and its notification is up, but no samples are
+            // arriving, and without this the screen would keep saying "active".
             InfoRow(
                 label = "Shake Detection",
                 value = stringResource(
-                    if (detectionActive) R.string.status_detection_active
-                    else R.string.status_detection_paused,
+                    when (detectionStatus) {
+                        DetectionStatus.ACTIVE -> R.string.status_detection_active
+                        DetectionStatus.STALLED -> R.string.status_detection_stalled
+                        DetectionStatus.INACTIVE -> R.string.status_detection_paused
+                    },
                 ),
-                valueColor = if (detectionActive) colors.accent else colors.onSurfaceVariant,
+                valueColor = when (detectionStatus) {
+                    DetectionStatus.ACTIVE -> colors.accent
+                    DetectionStatus.STALLED -> colors.primary
+                    DetectionStatus.INACTIVE -> colors.onSurfaceVariant
+                },
             )
             InfoRow(
                 label = stringResource(R.string.stat_activations),
