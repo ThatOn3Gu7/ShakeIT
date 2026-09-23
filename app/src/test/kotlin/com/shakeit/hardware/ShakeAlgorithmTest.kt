@@ -119,7 +119,7 @@ class ShakeAlgorithmTest {
             still(0.4f),
         )
 
-        assertEquals("shake on, then shake off, should both land", 2, fires)
+        assertEquals("shake on, then shake off, should both land", 2, fires.size)
     }
 
     @Test
