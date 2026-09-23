@@ -23,3 +23,4 @@ local.properties
 # Python — the CI report script's compiled bytecode
 __pycache__/
 *.py[cod]
+/diff.md

@@ -1,7 +1,9 @@
 package com.shakeit.ui.home
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -13,28 +15,36 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.FlashlightOff
+import androidx.compose.material.icons.rounded.FlashlightOn
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.shakeit.R
 import com.shakeit.ui.components.IconActionButton
 import com.shakeit.ui.components.ShakeItScreen
-import com.shakeit.ui.components.StatusPill
 import com.shakeit.ui.theme.ShakeItTheme
 import com.shakeit.ui.theme.ShakeItType
 import kotlinx.coroutines.delay
@@ -45,22 +55,9 @@ import kotlin.math.sin
 
 private val ShakeButtonShape = RoundedCornerShape(22.dp)
 
-/** `◐` and `⚙` — the same glyphs the prototype renders. */
 private const val THEME_GLYPH = "\u25D0"
 private const val SETTINGS_GLYPH = "\u2699"
 
-/**
- * The `#home` screen: status pill plus theme and settings actions, the hero
- * blob with its OFF/ON label, the "Shake to toggle" button, and the stats row.
- *
- * @param shakeRequest bumping this plays one shake, mirroring the prototype's
- *   `shakeBtn` handler: start the wobble, then toggle 380ms later.
- * @param detectedShake bumping this plays the same wobble for a shake the
- *   accelerometer recognised, with no toggle afterwards — the hardware already
- *   flipped the torch before this counter moved.
- * @param animateBlob false while Settings covers this screen, so the blob's
- *   frame loop parks instead of redrawing a layer nobody can see.
- */
 @Composable
 fun HomeScreen(
     torchOn: Boolean,
@@ -76,83 +73,139 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     ShakeItScreen(modifier = modifier) {
-        HomeTopBar(
-            statusText = stringResource(
-                if (detectionActive) R.string.status_detection_active
-                else R.string.status_detection_paused,
-            ),
-            detectionActive = detectionActive,
-            onToggleTheme = onToggleTheme,
-            onOpenSettings = onOpenSettings,
-        )
-
-        // `.hero-wrap` — flex:1, centred, 20px gap, 10px vertical padding.
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
+                .fillMaxSize()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Hero(
+            // Header Title & Parameter Stack
+            HomeHeaderSection(
                 torchOn = torchOn,
-                stateWord = stringResource(if (torchOn) R.string.state_on else R.string.state_off),
-                stateSub = stringResource(if (torchOn) R.string.state_sub_on else R.string.state_sub_off),
-                animateBlob = animateBlob,
-                shakeRequest = shakeRequest,
-                detectedShake = detectedShake,
-                onToggleTorch = onToggleTorch,
+                activations = activations,
+                detectionActive = detectionActive,
+                onToggleTheme = onToggleTheme,
+                onOpenSettings = onOpenSettings,
             )
-            ShakeButton(onClick = onSimulateShake)
-        }
 
-        StatsRow(activations = activations)
+            // Centered Hero Blob with Spin Transition & Material Icon
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                Hero(
+                    torchOn = torchOn,
+                    animateBlob = animateBlob,
+                    shakeRequest = shakeRequest,
+                    detectedShake = detectedShake,
+                    onToggleTorch = onToggleTorch,
+                )
+            }
+
+            // Bottom Action Trigger
+            ShakeButton(
+                onClick = onSimulateShake,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 
 @Composable
-private fun HomeTopBar(
-    statusText: String,
+private fun HomeHeaderSection(
+    torchOn: Boolean,
+    activations: Int,
     detectionActive: Boolean,
     onToggleTheme: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 40.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+    val colors = ShakeItTheme.colors
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        StatusPill(text = statusText, active = detectionActive)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            IconActionButton(
-                glyph = THEME_GLYPH,
-                description = stringResource(R.string.cd_toggle_theme),
-                onClick = onToggleTheme,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text(
+                text = if (torchOn) "Flashlight\nActive" else "Flashlight\nDisabled",
+                style = ShakeItType.stateWord.copy(
+                    fontSize = 38.sp,
+                    lineHeight = 44.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                color = colors.onSurface,
             )
-            IconActionButton(
-                glyph = SETTINGS_GLYPH,
-                description = stringResource(R.string.cd_open_settings),
-                onClick = onOpenSettings,
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconActionButton(
+                    glyph = THEME_GLYPH,
+                    description = stringResource(R.string.cd_toggle_theme),
+                    onClick = onToggleTheme,
+                )
+                IconActionButton(
+                    glyph = SETTINGS_GLYPH,
+                    description = stringResource(R.string.cd_open_settings),
+                    onClick = onOpenSettings,
+                )
+            }
+        }
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            InfoRow(
+                label = "Shake Detection",
+                value = stringResource(
+                    if (detectionActive) R.string.status_detection_active
+                    else R.string.status_detection_paused,
+                ),
+                valueColor = if (detectionActive) colors.accent else colors.onSurfaceVariant,
+            )
+            InfoRow(
+                label = stringResource(R.string.stat_activations),
+                value = activations.toString(),
+            )
+            InfoRow(
+                label = stringResource(R.string.stat_time_on_today),
+                value = stringResource(R.string.stat_time_on_today_value),
+            )
+            InfoRow(
+                label = stringResource(R.string.stat_avg_session),
+                value = stringResource(R.string.stat_avg_session_value),
             )
         }
     }
 }
 
-/**
- * `.hero` — the tappable blob + label column, and the node the wobble keyframes
- * are applied to.
- *
- * Owning the wobble here keeps the [Animatable] local, so it never has to be
- * passed around with a star-projected vector type.
- */
+@Composable
+private fun InfoRow(
+    label: String,
+    value: String,
+    valueColor: Color = ShakeItTheme.colors.onSurface,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = label,
+            style = ShakeItType.statLabel,
+            color = ShakeItTheme.colors.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = ShakeItType.buttonLabel.copy(fontWeight = FontWeight.Medium),
+            color = valueColor,
+        )
+    }
+}
+
 @Composable
 private fun Hero(
     torchOn: Boolean,
-    stateWord: String,
-    stateSub: String,
     animateBlob: Boolean,
     shakeRequest: Int,
     detectedShake: Int,
@@ -165,25 +218,28 @@ private fun Hero(
     val wobble = remember { Animatable(0f) }
     val currentToggle by rememberUpdatedState(onToggleTorch)
 
+    var targetRotation by remember { mutableFloatStateOf(0f) }
+    val animatedRotation by animateFloatAsState(
+        targetValue = targetRotation,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "heroSpin",
+    )
+
+    LaunchedEffect(torchOn) {
+        targetRotation += 360f
+    }
+
     LaunchedEffect(shakeRequest) {
         if (shakeRequest == 0) return@LaunchedEffect
         launch {
             wobble.snapTo(0f)
             wobble.animateTo(1f, tween(Wobble.DURATION_MS, easing = LinearEasing))
         }
-        // The prototype removes `.shaking` and toggles inside the same 380ms
-        // timeout, which snaps the transform back to rest a beat before the
-        // state flips. At 95% of the curve the remaining rotation is ~0.1deg,
-        // so the snap is invisible.
         delay(Wobble.TOGGLE_AT_MS)
         currentToggle()
         wobble.snapTo(0f)
     }
 
-    // The same wobble for a shake the sensors recognised, but with no toggle at
-    // the end: the engine flipped the torch before this counter moved, so
-    // toggling here would switch it straight back. The hero is simply shown
-    // reacting, which is what makes a shake with the screen on feel answered.
     LaunchedEffect(detectedShake) {
         if (detectedShake == 0) return@LaunchedEffect
         wobble.snapTo(0f)
@@ -191,19 +247,15 @@ private fun Hero(
         wobble.snapTo(0f)
     }
 
-    Column(
+    Box(
         modifier = Modifier
-            // `wobble.value` is read inside the layer block, so the animation
-            // invalidates only this layer and never triggers recomposition.
             .graphicsLayer {
                 val progress = wobble.value
-                val rotation = Wobble.rotationAt(progress)
-                rotationZ = rotation
-                // CSS `rotate(θ) translateX(d)` composes as
-                // translate(d·cosθ, d·sinθ) then rotate(θ), which is the order
-                // `graphicsLayer` applies in.
+                val wobbleRotation = Wobble.rotationAt(progress)
+                rotationZ = animatedRotation + wobbleRotation
+
                 val offset = Wobble.translationXAt(progress).dp.toPx()
-                val radians = rotation * (PI.toFloat() / 180f)
+                val radians = wobbleRotation * (PI.toFloat() / 180f)
                 translationX = offset * cos(radians)
                 translationY = offset * sin(radians)
             }
@@ -215,8 +267,7 @@ private fun Hero(
                 onClick = onToggleTorch,
             )
             .padding(10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(22.dp),
+        contentAlignment = Alignment.Center,
     ) {
         BlobCanvas(
             shape = shape,
@@ -226,32 +277,27 @@ private fun Hero(
             modifier = Modifier.size(BlobSize),
         )
 
-        // `.hero-label` — 5px gap between the state word and its subtitle.
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            Text(text = stateWord, style = ShakeItType.stateWord, color = colors.onSurface)
-            Text(text = stateSub, style = ShakeItType.stateSub, color = colors.onSurfaceVariant)
-        }
+        Icon(
+            imageVector = if (torchOn) Icons.Rounded.FlashlightOn else Icons.Rounded.FlashlightOff,
+            contentDescription = null,
+            modifier = Modifier.size(54.dp),
+            tint = if (torchOn) colors.surface else colors.onSurface,
+        )
     }
 }
 
-/**
- * `.shake-btn` — `border: 1.5px solid var(--outline)`, `background: var(--surface)`
- * (`--surface-2` on `:active`), 10px/22px padding, 22px radius.
- */
 @Composable
-private fun ShakeButton(onClick: () -> Unit) {
+private fun ShakeButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = ShakeItTheme.colors
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val label = stringResource(R.string.shake_to_toggle)
 
     Box(
-        modifier = Modifier
-            // Background first, border second: draw modifiers paint in chain
-            // order, so this puts the outline on top of the fill.
+        modifier = modifier
             .background(if (pressed) colors.surface2 else colors.surface, ShakeButtonShape)
             .border(BorderStroke(1.5.dp, colors.outline), ShakeButtonShape)
             .clickable(
@@ -261,53 +307,15 @@ private fun ShakeButton(onClick: () -> Unit) {
                 role = Role.Button,
                 onClick = onClick,
             )
-            .padding(horizontal = 22.dp, vertical = 10.dp),
+            .padding(horizontal = 22.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = label, style = ShakeItType.buttonLabel, color = colors.onSurface)
-    }
-}
-
-/** `.stats-row` — a hairline rule above three centred stats. */
-@Composable
-private fun StatsRow(activations: Int) {
-    val colors = ShakeItTheme.colors
-
-    Column {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(colors.outline),
+        Text(
+            text = label,
+            style = ShakeItType.buttonLabel,
+            color = colors.onSurface,
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 6.dp, end = 6.dp, top = 14.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-        ) {
-            Stat(value = activations.toString(), label = stringResource(R.string.stat_activations))
-            Stat(
-                value = stringResource(R.string.stat_time_on_today_value),
-                label = stringResource(R.string.stat_time_on_today),
-            )
-            Stat(
-                value = stringResource(R.string.stat_avg_session_value),
-                label = stringResource(R.string.stat_avg_session),
-            )
-        }
     }
 }
 
-@Composable
-private fun Stat(value: String, label: String) {
-    val colors = ShakeItTheme.colors
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(text = value, style = ShakeItType.statNumber, color = colors.onSurface)
-        Text(text = label, style = ShakeItType.statLabel, color = colors.onSurfaceVariant)
-    }
-}
