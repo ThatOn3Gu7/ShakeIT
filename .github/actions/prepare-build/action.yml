@@ -1,0 +1,62 @@
+name: Prepare the Android build environment
+description: >-
+  Installs JDK 17, primes the Gradle dependency cache, accepts the Android SDK
+  licences, and retunes the Termux-specific settings in gradle.properties inside
+  the CI checkout only, so the committed build works on a GitHub-hosted runner.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+        cache: gradle
+
+    - name: Accept the Android SDK licences
+      shell: bash
+      run: |
+        set -uo pipefail
+        sdkmanager="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+        if [ -x "$sdkmanager" ]; then
+          # AGP downloads anything the runner image is missing (compileSdk 36,
+          # build tools, the aapt2 Maven artifact) but only once the licences
+          # are accepted. `yes` dies on SIGPIPE when sdkmanager exits.
+          yes | "$sdkmanager" --licenses > /dev/null || true
+        else
+          echo "::warning::$sdkmanager not found; relying on pre-accepted licences"
+        fi
+
+    - name: Retune gradle.properties for a runner
+      shell: bash
+      run: |
+        set -euo pipefail
+        # The checked-in gradle.properties is tuned for building on a phone under
+        # Termux: aapt2 from Termux's own prefix (which does not exist here and
+        # would abort every resource build), one worker, no daemon, no
+        # parallelism and a 2 GB heap. Rewrite the copy in this checkout only --
+        # the committed file stays exactly as the phone build needs it, and
+        # nothing here is ever pushed back.
+        sed -i \
+          -e '/^android\.aapt2FromMavenOverride=/d' \
+          -e 's/^org\.gradle\.daemon=.*/org.gradle.daemon=true/' \
+          -e 's/^org\.gradle\.parallel=.*/org.gradle.parallel=true/' \
+          -e 's/^org\.gradle\.workers\.max=.*/org.gradle.workers.max=4/' \
+          -e 's/-Xmx2048m/-Xmx4g/' \
+          gradle.properties
+        printf 'org.gradle.caching=true\n' >> gradle.properties
+
+        # gradlew was committed without the executable bit; `sh gradlew` works
+        # everywhere but ./gradlew is what the workflow calls.
+        chmod +x gradlew
+
+        echo '--- gradle.properties as CI sees it ---'
+        cat gradle.properties
+
+    - name: Print the toolchain
+      shell: bash
+      run: |
+        set -euo pipefail
+        java -version
+        ./gradlew --version

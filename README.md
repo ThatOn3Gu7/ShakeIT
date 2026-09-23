@@ -46,12 +46,30 @@ app/src/main/kotlin/com/shakeit/
   ui/ShakeItApp.kt             theme resolution, animated background, nav host
   ui/ShakeItPreviews.kt        light/dark previews of both screens
   ui/navigation/               the two-screen cross-fade stack
-  ui/home/                     HomeScreen + BlobCanvas (hero animation)
+  ui/home/BlobMath.kt          the blob's numbers: easing, radius, spline (no Compose)
+  ui/home/BlobCanvas.kt        turns those numbers into a Path and paints the glow
+  ui/home/Wobble.kt            the @keyframes wobble curve (no Compose UI)
+  ui/home/HomeScreen.kt        Home layout: top bar, hero, shake button, stats
   ui/settings/                 SettingsScreen and its groups
   ui/components/               switch, slider, segmented control, buttons, pill,
                                and the shared `.screen` container
   ui/theme/                    palette, theme, typography
+
+app/src/test/kotlin/com/shakeit/
+  Assertions.kt                float-tolerant assertEquals (JUnit 4 has no Float overload)
+  ui/home/BlobMathTest.kt      the port checked against a Double transcription of the JS
+  ui/home/WobbleTest.kt        keyframes + CSS cubic-bezier easing
+  state/ShakeItStateTest.kt    torch counting, clamping, snapshots, navigation
+
+.github/
+  workflows/ci.yml             unit tests, lint, assembleDebug, PR failure report
+  actions/prepare-build/       JDK + SDK licences + runner-tuned gradle.properties
+  scripts/report_failures.py   turns a red build into one pull-request comment
 ```
+
+The maths behind the blob and the wobble lives in files with no Compose or
+Android import at all, which is what makes them testable on a plain JVM — see
+[Continuous integration](#continuous-integration).
 
 ## How the prototype maps onto the code
 
@@ -66,9 +84,9 @@ against each other.
 | `.screen` / `.screen.hidden` transform + opacity | `ShakeItNavHost` — two `graphicsLayer` progress values, 300ms, CSS `ease` |
 | `.screen.hidden { pointer-events: none }` | an input-consuming layer between the two screens |
 | `.screen { padding: 18px 20px ... }` + safe-area insets | `ShakeItScreen` — `windowInsetsPadding(systemBars)` then 18/20/20 |
-| `#blobPath` + the `frame()` loop | `BlobCanvas` + `rememberBlobShape` |
+| `#blobPath` + the `frame()` loop | `BlobMath` (the numbers) + `rememberBlobShape` / `BlobCanvas` (drawing them) |
 | `#blobPath.on` fill + `drop-shadow` | `onMix` driving a colour `lerp` and a `BlurMaskFilter` halo |
-| `@keyframes wobble` | `sampleKeyframes` with per-segment CSS `ease` |
+| `@keyframes wobble` | `Wobble` — keyframe tables sampled with per-segment CSS `ease` |
 | `.switch` / `.segmented` / `input[type=range]` | `ShakeItSwitch` / `SegmentedControl` / `ShakeItSlider` |
 | `:active { background: ... }` | press state via `collectIsPressedAsState`, ripple disabled |
 
@@ -100,7 +118,9 @@ compileSdk 36, minSdk 24, Compose BOM 2025.10.01 (Compose 1.9.4, Material 3
 1.4.0).
 
 ```
-./gradlew assembleDebug
+./gradlew assembleDebug      # the app
+./gradlew testDebugUnitTest  # JVM unit tests
+./gradlew lintDebug          # Android Lint
 ```
 
 ### Note on `gradle.properties`
@@ -121,7 +141,45 @@ before compiling anything. Override it for a single build with
 ```
 
 or comment the line out locally. It has been left in place on purpose so the
-Termux workflow keeps working.
+Termux workflow keeps working — CI rewrites its own copy of the file in the
+runner checkout instead, and never commits the result.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request against `master` and on
+pushes to `master`, filtered by path: a commit that only touches the README or
+the design mockup gets no runner time.
+
+| Job | Task | Fails on |
+| --- | --- | --- |
+| Unit tests (JVM) | `:app:testDebugUnitTest` | a failing assertion |
+| Android Lint | `:app:lintDebug` | a lint error (`ExpiredTargetSdkVersion` is disabled) |
+| Compile debug APK | `:app:assembleDebug` | any compile, resource or packaging error |
+
+The three jobs are independent on purpose — the APK is compiled even when the
+tests or lint fail, because "does it still build" is the question that decides
+what to fix next.
+
+`gradle.properties` is tuned for a phone under Termux (one worker, no daemon,
+2GB heap, Termux's `aapt2`), so `.github/actions/prepare-build` rewrites those
+settings in the runner's checkout before building. The committed file is never
+modified.
+
+### The failure report
+
+Each job tees its Gradle output into an artifact, and the `report` job runs
+`.github/scripts/report_failures.py` over them. It extracts the Kotlin compiler
+errors, resource errors, lint errors and failing test names — not the 40MB of
+surrounding log — and posts them as a single comment on the pull request,
+replacing the previous one on the next push. When a run goes green the stale
+comment is deleted.
+
+From a terminal, the same information is reachable with:
+
+```
+gh pr view --comments          # the report comment
+gh run view <run-id> --log-failed   # the raw Gradle output
+```
 
 ## Two seams worth knowing about
 
