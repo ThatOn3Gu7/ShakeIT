@@ -25,6 +25,9 @@ the Compose UI reproduces it rather than substituting a generic Material design.
 | Real shake detection — accelerometer, debounced, one shake one toggle | Done |
 | Pocket guard — proximity sensor suppresses shake while covered | Done |
 | Background detection — foreground service, works screen off and locked | Done |
+| Screen-off sensor delivery — wake-up sensor, else a scoped partial wake lock | Done |
+| Detection health — `ACTIVE` / `STALLED` / `INACTIVE` in the notification and on Home | Done |
+| Battery-optimisation check + standard settings intent + vendor auto-start guidance | Done |
 | Haptic tick on every real torch change | Done |
 | UI mirrors hardware: torch state comes from `CameraManager.TorchCallback` | Done |
 
@@ -36,7 +39,9 @@ The torch, the shake and the background service are real — see
 - **Settings switches** — every control persists and animates, but none of them
   change behaviour yet. Sensitivity does not retune the detector, "Detection
   active" does not stop it, "Auto-off" and "Start after reboot" have no
-  implementation behind them.
+  implementation behind them. The one exception in the Advanced group is
+  **Background reliability**, which reports a real platform answer and opens the
+  real system screen — see [Background reliability](#background-reliability).
 - **The on-screen "Shake to toggle" button** — it stands in for a shake: the same
   wobble, then a real toggle 380ms in. Useful for testing the torch without
   shaking the phone.
@@ -50,10 +55,12 @@ The torch, the shake and the background service are real — see
 app/src/main/kotlin/com/shakeit/
   ShakeItApplication.kt        creates the engine, so it outlives every screen
   MainActivity.kt              single-activity host, starts the service, edge to edge
-  engine/ShakeItEngine.kt      process-wide hardware owner + rememberShakeItEngine()
+  engine/ShakeItEngine.kt      process-wide hardware owner + detection watchdog
+  background/BatteryRestrictions.kt  is the app exempt from Doze, and how to fix it
   hardware/TorchController.kt  CameraManager torch + callback -> StateFlow
-  hardware/ShakeDetector.kt    accelerometer & proximity plumbing
+  hardware/ShakeDetector.kt    sensor thread, wake lock, accelerometer & proximity
   hardware/ShakeAlgorithm.kt   the shake rule: pure maths, no Android imports
+  hardware/DetectionHealth.kt  pure rules: when a wake lock is needed, when it stalled
   hardware/Haptics.kt          one short tick per real torch change
   service/ShakeItService.kt    foreground service, keeps detection alive
   service/ShakeItNotification.kt  channel + status notification
@@ -77,6 +84,7 @@ app/src/test/kotlin/com/shakeit/
   ui/home/WobbleTest.kt        keyframes + CSS cubic-bezier easing
   state/ShakeItStateTest.kt    torch counting, clamping, snapshots, navigation
   hardware/ShakeAlgorithmTest.kt  synthetic motion: shakes, running, pockets, knocks
+  hardware/DetectionHealthTest.kt wake-lock rule and the stall thresholds
 
 .github/
   workflows/ci.yml             unit tests, lint, assembleDebug, PR failure report
@@ -200,6 +208,41 @@ sensors to the engine, and keeps its notification in step with the hardware —
 "Listening for shakes — torch off" / "— torch on" / "Paused — phone looks
 covered". `START_STICKY` brings it back after a low-memory kill.
 
+#### Why it used to stop when the screen went off
+
+A foreground service keeps the *process* alive. It does not keep the
+*application processor* awake, and a non-wake-up sensor delivers nothing while
+that processor is suspended — which is exactly what happens when the screen turns
+off. `SensorManager` documents the requirement outright: to keep receiving events
+with the screen off, hold a partial wake lock. So the earlier version had a live
+service, a registered listener and a visible notification saying "Listening",
+over an accelerometer that had stopped reporting. Nothing was wrong with the
+service; the samples simply never arrived.
+
+Four things now stand between that and working detection:
+
+1. **A wake-up accelerometer is preferred** — `getDefaultSensor(TYPE_
+   ACCELEROMETER, true)` on API 26+. A wake-up sensor wakes the processor itself
+   for every event, so it needs no help. Most devices do not expose one, which is
+   why this is a preference rather than the fix.
+2. **A `PARTIAL_WAKE_LOCK`, held only while armed *and* the screen is off** — the
+   documented requirement above. It is scoped to screen-off because with the
+   screen on the processor is awake already, and scoped to armed because an idle
+   app holding a lock is how ShakeIT would end up on a battery-usage report. A
+   non-reference-counted lock makes acquire and release idempotent, so a stray
+   screen broadcast cannot double-hold or early-release it.
+3. **Sensor callbacks run on their own `HandlerThread`** — so a blocked, busy or
+   OEM-frozen main thread cannot stall recognition, and a shake with the screen
+   off never queues behind a composition that no longer exists.
+4. **A watchdog measures the gap between samples** and turns it into a
+   `DetectionStatus` of `ACTIVE`, `STALLED` or `INACTIVE`, so the failure can no
+   longer be silent — see [Background reliability](#background-reliability).
+
+Doze is the limit of all this. Doze *ignores* partial wake locks, so an app that
+has not been exempted from battery optimisation can be armed, alive and still
+starved — which is what `STALLED` reports. Being set to "Unrestricted" in the
+system UI is what makes the lock count.
+
 The notification's Stop action goes to a `BroadcastReceiver` rather than a service
 `PendingIntent`, because stopping a service is allowed from any app state while
 starting one from the background is not. The service type is `specialUse` with
@@ -207,6 +250,86 @@ the reason spelled out in the manifest's `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`
 property, since none of the platform's types describe "read the accelerometer
 while the screen is off". `POST_NOTIFICATIONS` is requested once on Android 13+;
 refusing it hides the notification but does not stop detection.
+
+### Background reliability
+
+`DetectionStatus` is the honest answer to "is it working?", and it is derived
+from facts rather than intentions: armed, an accelerometer was found, and how
+long it has been since a sample arrived. `hardware/DetectionHealth.kt` holds the
+two pure rules — when a wake lock is needed, and when the detector has gone
+stale — and `app/src/test/.../DetectionHealthTest.kt` pins them down, because
+the failure they describe only reproduces on a real device with the screen off.
+
+The engine's watchdog asks the detector for the age of its newest sample every
+two seconds and publishes the result. It appears in two places:
+
+- the **notification**, so the truth is visible with the screen off —
+  "Detection stalled — battery settings may be blocking it";
+- the **Home status row**, "Shake Detection", which now reports the hardware
+  instead of the Settings switch's stored value.
+
+`background/BatteryRestrictions.kt` reads
+`PowerManager.isIgnoringBatteryOptimizations` and, when the answer is no, the
+Advanced settings card offers **Open battery settings** plus a named set of manual
+steps for this device's power manager. Only standard AOSP intents are used:
+`ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` and
+`ACTION_APPLICATION_DETAILS_SETTINGS`. `ACTION_REQUEST_IGNORE_BATTERY_
+OPTIMIZATIONS` — the yes/no dialog — is deliberately avoided: it needs a
+permission Play restricts, and it decides for the user before they have read
+anything.
+
+When the app *is* already exempt, the row says so and offers nothing to tap. No
+user is sent into system settings to fix a problem they do not have.
+
+**Vendor auto-start managers cannot be opened programmatically.** XOS and MIUI
+have no public, stable intent for their auto-start screens; anything that reaches
+one does it by guessing a component name that an OTA can move. So ShakeIT detects
+the vendor from `Build.MANUFACTURER` and describes the steps in words instead.
+On Infinix, Tecno and itel (all Transsion, all XOS/HiOS):
+
+> Settings → Battery & power saving → App management → ShakeIT → allow background
+> activity, then enable ShakeIT under Auto-start / Startup manager.
+
+XOS is among the most aggressive OEM power managers known — dontkillmyapp lists
+Infinix as one of the worst offenders — and can freeze a foreground service
+regardless of what the app does correctly. `onTaskRemoved` re-arms detection
+rather than stopping the service, because on stock Android a removed task takes
+the activity with it and leaves the foreground service running, which is the
+behaviour this app is designed around.
+
+## Testing background detection
+
+The sequence below is what the fix has to survive. `adb logcat -s ShakeDetector
+ShakeItEngine` prints the arming line, every wake-lock transition and every
+status change, which is how a failure identifies itself.
+
+1. Open the app; the service starts and the notification reads **Listening for
+   shakes — torch off**.
+2. Confirm the Home row says **Shake detection active**.
+3. `adb logcat` should show `detection armed: wakeUpSensor=…, proximity=…,
+   wakeLock=…`.
+4. Check Settings → Advanced → **Background reliability**. If it says battery
+   optimisation may stop detection, tap **Open battery settings** and set ShakeIT
+   to *Unrestricted*; on Infinix also follow the auto-start steps printed under
+   the button.
+5. Shake the phone → the torch flips, haptic ticks, notification reads **torch
+   on**.
+6. Lock the screen (`logcat`: `screen off: holding a partial wake lock…` unless
+   the device has a wake-up sensor).
+7. Shake → the torch flips. This is the step that failed before the fix.
+8. Unlock: the Home row and the notification agree with the torch's real state.
+9. Press Home; wait 2 minutes; shake → the torch flips.
+10. Open Recents and swipe ShakeIT away. The notification must remain.
+11. Wait 2 minutes; shake → the torch flips. The activity is gone; the service is
+    not.
+12. Check the notification still reads **Listening** rather than **stalled** —
+    that is the no-silent-stop guarantee.
+13. Lock the screen, wait 10 minutes, shake → the torch flips.
+14. If any step fails, the notification and the Home row should say **Detection
+    stalled**; that means the process was frozen or starved by the OEM power
+    manager, not that the listener was unregistered.
+15. Re-check step 4's answer after the failure: on XOS the exemption can be
+    revoked by the system, and it is the usual cause.
 
 ## Building
 
@@ -295,15 +418,19 @@ background" and "Start after reboot" switches persist their values and nothing
 else. Detection is armed whenever the service runs, and there is no boot
 receiver. Wiring them means driving `engine.stopDetection()` /
 `engine.stopService()` from `ShakeItState.detectionActive` and adding a
-`BOOT_COMPLETED` receiver — the engine already exposes both halves. Until then
-the Home status pill reports the Settings value rather than the hardware;
-`ShakeItEngine.detectionRunning` is the truthful one.
+`BOOT_COMPLETED` receiver — the engine already exposes both halves. The Home
+status row no longer reads the switch: it reports `ShakeItEngine.detectionStatus`,
+which is derived from the detector, so the screen can read *active* while that
+switch is off. Making the switch authoritative is the missing half.
 
-**OEM background limits.** The service is correct standard Android and survives
-the screen turning off, the device locking and the task being swiped away. It
-does not survive a manufacturer that kills foreground services regardless, and
-nothing here requests a battery-optimisation exemption or uses Shizuku. Both are
-deliberately out of scope for this pass.
+**OEM background limits.** The app now does everything standard Android allows:
+foreground service, screen-off-scoped wake lock, wake-up sensor when available,
+own sensor thread, and a watchdog that reports starvation instead of hiding it —
+see [Background reliability](#background-reliability). It still cannot survive a
+manufacturer that freezes foreground services regardless, and it will not try to:
+no hidden activity, no keep-alive hacks, no guessed vendor component names. What
+remains out of scope is Shizuku, which could lift restrictions the public API
+cannot.
 
 **Dynamic color.** The Appearance group's "Dynamic color" switch is wired and
 persisted. On Android 12+ it selects the device's wallpaper-derived Material

@@ -14,6 +14,14 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- One short tick when the torch really changes state. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!--
+      Held only while detection is armed and the screen is off, and only on
+      devices with no wake-up accelerometer. SensorManager documents that a
+      non-wake-up sensor delivers nothing while the application processor is
+      suspended, so without this the service stays alive and its notification
+      stays up while samples silently stop arriving.
+    -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!--
       Every one of these degrades instead of failing: no flash means the tap
@@ -53,10 +61,15 @@
           accelerometer while the screen is off", which is what specialUse is
           for; the property below states the reason, as Android 14 requires.
         -->
+        <!--
+          stopWithTask is false by default and stays that way on purpose: swiping
+          the task out of Recents removes the activity, not the detection.
+        -->
         <service
             android:name=".service.ShakeItService"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Recognises a deliberate shake from the accelerometer while the screen is off, locked or the app is backgrounded, so the user can toggle the flashlight without unlocking." />

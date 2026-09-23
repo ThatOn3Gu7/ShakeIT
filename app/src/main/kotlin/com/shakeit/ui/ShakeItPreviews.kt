@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import com.shakeit.hardware.DetectionStatus
 import com.shakeit.state.DefaultShakeItSnapshot
 import com.shakeit.state.ShakeItState
 import com.shakeit.ui.home.HomeScreen
@@ -92,7 +93,7 @@ private fun HomeScreenPreview(torchOn: Boolean) {
     HomeScreen(
         torchOn = torchOn,
         activations = DefaultShakeItSnapshot.activations,
-        detectionActive = true,
+        detectionStatus = DetectionStatus.ACTIVE,
         shakeRequest = 0,
         detectedShake = 0,
         // Frozen in previews: the frame loop would otherwise keep the preview

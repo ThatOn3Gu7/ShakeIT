@@ -11,14 +11,17 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
 import com.shakeit.MainActivity
 import com.shakeit.R
+import com.shakeit.hardware.DetectionStatus
 
 /**
  * The foreground notification for [ShakeItService].
  *
  * It doubles as the only visible sign that shake detection is armed, so its text
- * reports what the detector is doing right now — listening, torch on, or paused
- * because the phone looks covered — and refreshing it is what tells a user with
- * the screen off that a shake actually landed.
+ * reports what the detector is doing right now — listening, torch on, paused
+ * because the phone looks covered, or *stalled*, meaning the service is alive but
+ * no samples are arriving. That last one matters: a foreground service whose
+ * notification claims to be listening while its sensor has been starved is worse
+ * than no notification at all, because it hides the actual problem.
  *
  * The framework [NotificationManager] is used directly rather than the AndroidX
  * wrapper: posting is a no-op without `POST_NOTIFICATIONS` on Android 13+ either
@@ -52,12 +55,25 @@ internal object ShakeItNotification {
      * Builds the notification for the current hardware state.
      *
      * @param covered whether the proximity sensor says the phone is in a pocket
+     * @param status whether detection is really running, stalled, or impossible
+     *   on this device
      */
-    fun build(context: Context, torchOn: Boolean, covered: Boolean): Notification {
-        val statusText = when {
-            covered -> context.getString(R.string.notification_covered)
-            torchOn -> context.getString(R.string.notification_torch_on)
-            else -> context.getString(R.string.notification_listening)
+    fun build(
+        context: Context,
+        torchOn: Boolean,
+        covered: Boolean,
+        status: DetectionStatus,
+    ): Notification {
+        // A problem outranks a state: "torch on" is not worth reporting if the
+        // detector that would turn it off has stopped hearing anything.
+        val statusText = when (status) {
+            DetectionStatus.STALLED -> context.getString(R.string.notification_stalled)
+            DetectionStatus.INACTIVE -> context.getString(R.string.notification_inactive)
+            DetectionStatus.ACTIVE -> when {
+                covered -> context.getString(R.string.notification_covered)
+                torchOn -> context.getString(R.string.notification_torch_on)
+                else -> context.getString(R.string.notification_listening)
+            }
         }
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
