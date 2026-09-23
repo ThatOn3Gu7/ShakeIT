@@ -21,27 +21,43 @@ the Compose UI reproduces it rather than substituting a generic Material design.
 | Settings persistence (`SharedPreferences`) | Done |
 | System back handling on Settings | Done |
 | Previews for both screens at 390x844, light and dark | Done |
+| Real flashlight — tap the hero, the flash actually moves | Done |
+| Real shake detection — accelerometer, debounced, one shake one toggle | Done |
+| Pocket guard — proximity sensor suppresses shake while covered | Done |
+| Background detection — foreground service, works screen off and locked | Done |
+| Haptic tick on every real torch change | Done |
+| UI mirrors hardware: torch state comes from `CameraManager.TorchCallback` | Done |
 
-## What is deliberately simulated
+## What is still simulated
 
-Hardware and platform integration is out of scope for this pass. Nothing below
-touches real device capability yet:
+The torch, the shake and the background service are real — see
+[How a shake becomes light](#how-a-shake-becomes-light). These are not:
 
-- **Flashlight** — `torchOn` is plain state. No `CameraManager.setTorchMode`.
-- **Shake detection** — no `SensorManager`. The "Shake to toggle" button stands
-  in for a detected shake and runs the same wobble-then-toggle sequence the
-  prototype's button runs.
-- **Background service / reboot start / auto-off** — the switches persist their
-  values and nothing more. `FOREGROUND_SERVICE_DATA_SYNC` is declared but unused.
+- **Settings switches** — every control persists and animates, but none of them
+  change behaviour yet. Sensitivity does not retune the detector, "Detection
+  active" does not stop it, "Auto-off" and "Start after reboot" have no
+  implementation behind them.
+- **The on-screen "Shake to toggle" button** — it stands in for a shake: the same
+  wobble, then a real toggle 380ms in. Useful for testing the torch without
+  shaking the phone.
 - **Shizuku** — "Connect Shizuku" flips to "Connected" and disables itself.
-- **Stats** — "Activations" is live and persisted. "Time on today" and
-  "Avg session" are the prototype's placeholder values.
+- **Stats** — "Activations" counts real torch-ons and is persisted. "Time on
+  today" and "Avg session" are the prototype's placeholder values.
 
 ## Structure
 
 ```
 app/src/main/kotlin/com/shakeit/
-  MainActivity.kt              single-activity host, edge to edge
+  ShakeItApplication.kt        creates the engine, so it outlives every screen
+  MainActivity.kt              single-activity host, starts the service, edge to edge
+  engine/ShakeItEngine.kt      process-wide hardware owner + rememberShakeItEngine()
+  hardware/TorchController.kt  CameraManager torch + callback -> StateFlow
+  hardware/ShakeDetector.kt    accelerometer & proximity plumbing
+  hardware/ShakeAlgorithm.kt   the shake rule: pure maths, no Android imports
+  hardware/Haptics.kt          one short tick per real torch change
+  service/ShakeItService.kt    foreground service, keeps detection alive
+  service/ShakeItNotification.kt  channel + status notification
+  service/StopDetectionReceiver.kt the notification's Stop action
   state/ShakeItState.kt        settings + torch + nav state, SharedPreferences store
   ui/ShakeItApp.kt             theme resolution, animated background, nav host
   ui/ShakeItPreviews.kt        light/dark previews of both screens
@@ -60,6 +76,7 @@ app/src/test/kotlin/com/shakeit/
   ui/home/BlobMathTest.kt      the port checked against a Double transcription of the JS
   ui/home/WobbleTest.kt        keyframes + CSS cubic-bezier easing
   state/ShakeItStateTest.kt    torch counting, clamping, snapshots, navigation
+  hardware/ShakeAlgorithmTest.kt  synthetic motion: shakes, running, pockets, knocks
 
 .github/
   workflows/ci.yml             unit tests, lint, assembleDebug, PR failure report
@@ -67,9 +84,9 @@ app/src/test/kotlin/com/shakeit/
   scripts/report_failures.py   turns a red build into one pull-request comment
 ```
 
-The maths behind the blob and the wobble lives in files with no Compose or
-Android import at all, which is what makes them testable on a plain JVM — see
-[Continuous integration](#continuous-integration).
+The maths behind the blob, the wobble and the shake rule lives in files with no
+Compose or Android import at all, which is what makes them testable on a plain
+JVM — see [Continuous integration](#continuous-integration).
 
 ## How the prototype maps onto the code
 
@@ -109,6 +126,87 @@ Material 3's `Switch` and `Slider` are intentionally not used. The prototype's
 44x26 switch with an 18dp-travelling knob and its `accent-color` range input do
 not correspond to any Material component, and hand-drawing them keeps the
 metrics exact while insulating the code from Material 3 signature churn.
+
+## How a shake becomes light
+
+Three layers, one job each:
+
+| Layer | Files | Responsibility |
+| --- | --- | --- |
+| Hardware | `hardware/TorchController.kt`, `hardware/ShakeDetector.kt`, `hardware/ShakeAlgorithm.kt`, `hardware/Haptics.kt` | Drive the flash, read the sensors, decide what counts as a shake |
+| Engine | `engine/ShakeItEngine.kt`, `ShakeItApplication.kt` | One process-wide owner of that hardware, publishing `StateFlow`s |
+| Hosts | `MainActivity.kt`, `service/ShakeItService.kt`, `ui/ShakeItApp.kt` | Ask the engine for changes, and render what it reports |
+
+The rule that keeps them honest runs one way: **hardware state flows into the UI,
+never back**. `ShakeItState.torchOn` has no toggle method — the only way it
+changes is `onTorchStateChanged`, called by a collector on
+`TorchController.torchOn`, which is fed by a `CameraManager.TorchCallback`. A tap,
+the on-screen button, a shake with the screen locked and a camera app stealing
+the flash all arrive through that same path, so the screen cannot disagree with
+the light.
+
+### Torch
+
+`CameraManager.setTorchMode()` against the back camera's flash unit. It does not
+open the camera and needs no `CAMERA` permission, which is why the manifest does
+not declare one. `TorchCallback` mirrors the real state back, including
+`onTorchModeUnavailable` — that is what tells the truth when another app takes
+the flash. Every request is wrapped: a device with no flash logs and refuses, and
+the UI stays put rather than showing a light that is not on. A successful change
+also fires one short haptic tick, from the engine, so a shake with the phone in
+your hand feels the same as a tap.
+
+### Shake recognition
+
+`ShakeAlgorithm` is pure Kotlin — no Android imports and no clock of its own, the
+caller passes in the sensor timestamp — so the whole rule is asserted on the JVM
+in `ShakeAlgorithmTest` against synthetic streams shaped like real motion: hand
+shakes at several rates and amplitudes, running, walking, a knock, a car
+accelerating, a pocket.
+
+Gravity is removed with a low-pass filter whose coefficient comes from the actual
+sample interval, so the cutoff is identical at 20 Hz and at 200 Hz. What is left
+is grouped into *impulses* — a peak above the threshold, closed by hysteresis, by
+turning around along the axis it pushed on, or by timing out — and a shake needs
+all of this at once:
+
+| Guard | Default | What it rejects |
+| --- | --- | --- |
+| Intensity: impulse peak | 14 m/s² (~1.4g) | walking, typing, setting the phone down |
+| Rate: 3 impulses within 450 ms | ≈6 per second | a 2 Hz walking cadence, a single knock |
+| Reversal: alternating sign on one axis | 2 reversals | a car accelerating, an escalator, running impacts |
+| Separation: 300 ms of calm after firing | | the tail of the same shake toggling again |
+| Cooldown: floor between toggles | 500 ms | short repeated bursts machine-gunning the flash |
+
+The separation rule is what makes "one shake, one toggle" hold however long the
+shake goes on: shaking for two seconds is one toggle, shaking again after a beat
+is two. A deliberate 4 Hz shake is recognised roughly 360ms after it starts.
+
+### Pocket guard
+
+The proximity sensor decides whether the phone is covered — anything under
+`min(maximumRange, 4 cm)`, a form that works for both the binary sensors most
+phones have and real distance sensors. While covered the algorithm is not merely
+quiet, it *forgets*: impulses are discarded as they arrive, so the jostling of a
+pocket cannot be banked up and released the instant the phone is pulled out. A
+device with no proximity sensor simply never reports covered.
+
+### Background
+
+`ShakeItService` is a foreground service, started by the activity and outliving
+it, so detection continues with the screen off, the device locked and the task
+swiped away. It owns no logic: it promotes itself to the foreground, hands the
+sensors to the engine, and keeps its notification in step with the hardware —
+"Listening for shakes — torch off" / "— torch on" / "Paused — phone looks
+covered". `START_STICKY` brings it back after a low-memory kill.
+
+The notification's Stop action goes to a `BroadcastReceiver` rather than a service
+`PendingIntent`, because stopping a service is allowed from any app state while
+starting one from the background is not. The service type is `specialUse` with
+the reason spelled out in the manifest's `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`
+property, since none of the platform's types describe "read the accelerometer
+while the screen is off". `POST_NOTIFICATIONS` is requested once on Android 13+;
+refusing it hides the notification but does not stop detection.
 
 ## Building
 
@@ -181,7 +279,7 @@ gh pr view --comments          # the report comment
 gh run view <run-id> --log-failed   # the raw Gradle output
 ```
 
-## Two seams worth knowing about
+## Seams worth knowing about
 
 **Manrope.** The prototype sets its display text (the OFF/ON word, the Settings
 title, the stat numbers) in Manrope 700/800 and its body text in Roboto. Roboto
@@ -191,6 +289,21 @@ shipped with Android and no font binary is committed here, so
 Drop `manrope_bold.ttf` and `manrope_extrabold.ttf` into
 `app/src/main/res/font/` and point `DisplayFontFamily` at them — every display
 style reads from that one value, so nothing else changes.
+
+**Detection switches.** The Settings group's "Detection active", "Run in
+background" and "Start after reboot" switches persist their values and nothing
+else. Detection is armed whenever the service runs, and there is no boot
+receiver. Wiring them means driving `engine.stopDetection()` /
+`engine.stopService()` from `ShakeItState.detectionActive` and adding a
+`BOOT_COMPLETED` receiver — the engine already exposes both halves. Until then
+the Home status pill reports the Settings value rather than the hardware;
+`ShakeItEngine.detectionRunning` is the truthful one.
+
+**OEM background limits.** The service is correct standard Android and survives
+the screen turning off, the device locking and the task being swiped away. It
+does not survive a manufacturer that kills foreground services regardless, and
+nothing here requests a battery-optimisation exemption or uses Shizuku. Both are
+deliberately out of scope for this pass.
 
 **Dynamic color.** The Appearance group's "Dynamic color" switch is wired and
 persisted. On Android 12+ it selects the device's wallpaper-derived Material
