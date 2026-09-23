@@ -238,6 +238,11 @@ Four things now stand between that and working detection:
    `DetectionStatus` of `ACTIVE`, `STALLED` or `INACTIVE`, so the failure can no
    longer be silent — see [Background reliability](#background-reliability).
 
+The lock costs battery — a partial wake lock held through a night is measurable,
+and that is the price of a detector that has to hear a shake with the screen off.
+What keeps it honest is the scoping: nothing is held while the screen is on or
+while detection is stopped, and the moment `stop()` runs the lock goes with it.
+
 Doze is the limit of all this. Doze *ignores* partial wake locks, so an app that
 has not been exempted from battery optimisation can be armed, alive and still
 starved — which is what `STALLED` reports. Being set to "Unrestricted" in the

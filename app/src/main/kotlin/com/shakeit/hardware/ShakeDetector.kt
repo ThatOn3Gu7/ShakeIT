@@ -30,11 +30,12 @@ import androidx.core.content.getSystemService
  * stall recognition — and a shake recognised with the screen off never has to
  * wait for a composition that no longer exists.
  *
- * **A wake-up sensor, if the device has one.** `SensorManager` documents that
+ * **Wake-up sensors, if the device has them.** `SensorManager` documents that
  * non-wake-up sensors only deliver while the application processor is awake: to
  * keep receiving them with the screen off, the app must hold a partial wake
- * lock. A wake-up accelerometer does the waking itself, which is strictly
- * better, so it is preferred when present.
+ * lock. A wake-up sensor does the waking itself, which is strictly better, so a
+ * wake-up accelerometer is preferred when present — and the lock is skipped only
+ * when every sensor in use is one.
  *
  * **A partial wake lock otherwise.** Held only while detection is armed *and*
  * the screen is off — with the screen on the processor is awake already, so
@@ -82,9 +83,22 @@ class ShakeDetector(
     val hasAccelerometer: Boolean
         get() = accelerometer != null
 
-    /** Whether the accelerometer in use can wake the processor from suspend. */
+    /**
+     * Whether *every* sensor in use can wake the processor from suspend itself —
+     * the accelerometer and, when the device has one, the proximity sensor.
+     *
+     * One non-wake-up listener is enough to require a lock, and the pocket guard
+     * is exactly that listener: proximity sensors are essentially never wake-up
+     * sensors, so treating the accelerometer alone as sufficient would leave
+     * "is the phone covered" frozen at whatever it read when the screen went off.
+     */
     val usesWakeUpSensor: Boolean
-        get() = accelerometer?.isWakeUpSensor == true
+        get() {
+            val accel = accelerometer ?: return false
+            if (!accel.isWakeUpSensor) return false
+            val proximity = proximitySensor ?: return true
+            return proximity.isWakeUpSensor
+        }
 
     /** Whether this device has a proximity sensor, i.e. whether the pocket guard can work. */
     val hasProximitySensor: Boolean
@@ -140,8 +154,9 @@ class ShakeDetector(
 
         Log.i(
             TAG,
-            "detection armed: wakeUpSensor=${sensor.isWakeUpSensor}, " +
-                "proximity=${proximitySensor != null}, wakeLock=${wakeLock?.isHeld == true}",
+            "detection armed: allSensorsWakeUp=$usesWakeUpSensor, " +
+                "accelWakeUp=${sensor.isWakeUpSensor}, proximity=${proximitySensor != null}, " +
+                "wakeLock=${wakeLock?.isHeld == true}",
         )
         return true
     }
