@@ -15,10 +15,10 @@
     <!-- One short tick when the torch really changes state. -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!--
-      Held only while detection is armed and the screen is off, and only on
-      devices with no wake-up accelerometer. SensorManager documents that a
-      non-wake-up sensor delivers nothing while the application processor is
-      suspended, so without this the service stays alive and its notification
+      Held only while detection is armed and the screen is off, and only when a
+      sensor in use cannot wake the processor itself. SensorManager documents
+      that a non-wake-up sensor delivers nothing while the application processor
+      is suspended, so without this the service stays alive and its notification
       stays up while samples silently stop arriving.
     -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -60,8 +60,7 @@
           None of the platform's foreground service types describe "read the
           accelerometer while the screen is off", which is what specialUse is
           for; the property below states the reason, as Android 14 requires.
-        -->
-        <!--
+
           stopWithTask is false by default and stays that way on purpose: swiping
           the task out of Recents removes the activity, not the detection.
         -->
