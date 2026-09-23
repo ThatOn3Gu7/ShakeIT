@@ -99,7 +99,19 @@ jobs:
         run: |
           set -uo pipefail
           ./gradlew $GRADLE_ARGS :app:lintDebug 2>&1 | tee "$GRADLE_LOG"
-          exit "${PIPESTATUS[0]}"
+          status="${PIPESTATUS[0]}"
+          # Lint's findings only exist in its report files, so splice them into
+          # the log the report job parses. The text report is the readable one;
+          # the XML is the fallback if AGP ever moves the text output.
+          for report in app/build/reports/lint-results-debug.txt \
+                        app/build/reports/lint-results-debug.xml; do
+            if [ -f "$report" ]; then
+              { echo "--- $report ---"; cat "$report"; } >> "$GRADLE_LOG"
+            else
+              echo "missing report: $report" >> "$GRADLE_LOG"
+            fi
+          done
+          exit "$status"
 
       - name: Upload the build log
         if: always()

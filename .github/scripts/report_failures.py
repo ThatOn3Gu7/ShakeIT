@@ -23,6 +23,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -127,6 +128,9 @@ TEST_FAILURE = re.compile(r"^(?P<test_class>[\w.$]+) > (?P<name>.+?) FAILED\s*$"
 FAILED_TASK = re.compile(r"^> Task (?P<task>:\S+) FAILED\s*$")
 BUILD_RESULT = re.compile(r"^BUILD (?P<outcome>FAILED|SUCCESSFUL) in (?P<duration>.+)$")
 
+# Lint's XML report, spliced into the build log by the lint job.
+LINT_XML_BLOB = re.compile(r"<\?xml.*?</issues>", re.DOTALL)
+
 GRADLE_FAILURE_HEADER = "FAILURE: Build failed with an exception."
 GRADLE_BLOCK_STOPS = ("* Exception is:", "* Get more help", "BUILD FAILED", "BUILD SUCCESSFUL")
 
@@ -137,9 +141,15 @@ def relative(path: str, workspace: str) -> str:
     if cleaned.startswith("file://"):
         cleaned = cleaned[len("file://") :]
     prefix = workspace.rstrip("/") + "/"
-    if prefix != "/" and cleaned.startswith(prefix):
-        return cleaned[len(prefix) :]
-    # Fall back to the part of the path that identifies the file in this repo.
+    if cleaned.startswith(prefix):
+        cleaned = cleaned[len(prefix) :]
+    # Lint's XML report writes paths relative to the module directory, and this
+    # project has exactly one module.
+    if cleaned.startswith("src/"):
+        cleaned = "app/" + cleaned
+    if not cleaned.startswith("/"):
+        return cleaned
+    # Last resort: keep the part of the path that identifies the file in the repo.
     for marker in ("/app/src/", "/app/", "/gradle/", "/build.gradle.kts"):
         index = cleaned.rfind(marker)
         if index >= 0:
@@ -193,6 +203,39 @@ def collect_test_failure(lines: list[str], start: int) -> tuple[str, list[str], 
             messages.append(stripped)
         index += 1
     return " ".join(messages), frames, index
+
+
+def parse_lint_xml(text: str, workspace: str) -> list[Finding]:
+    """Reads lint's XML report when it has been spliced into the build log.
+
+    The text report is preferred -- it is what a developer reads -- but it is
+    written by AGP, not by us, so the XML is kept as a second channel.
+    """
+    findings: list[Finding] = []
+    for match in LINT_XML_BLOB.finditer(text):
+        try:
+            root = ElementTree.fromstring(match.group(0))
+        except ElementTree.ParseError:
+            continue
+        for issue in root.findall("issue"):
+            message = (issue.get("message") or "").strip()
+            issue_id = issue.get("id") or ""
+            location = issue.find("location")
+            line = None
+            path = ""
+            if location is not None:
+                path = relative(location.get("file") or "", workspace)
+                raw_line = location.get("line") or ""
+                line = int(raw_line) if raw_line.isdigit() else None
+            findings.append(
+                Finding(
+                    path=path,
+                    line=line,
+                    message=f"{message} [{issue_id}]" if issue_id else message,
+                    severity=(issue.get("severity") or "error").lower(),
+                )
+            )
+    return dedupe(findings)
 
 
 def parse_log(path: Path, workspace: str) -> ParsedLog:
@@ -281,6 +324,11 @@ def parse_log(path: Path, workspace: str) -> ParsedLog:
     parsed.compiler = dedupe(parsed.compiler)
     parsed.resources = dedupe([f for f in parsed.resources if f.severity == "error"])
     parsed.lint = dedupe(parsed.lint)
+    if not parsed.lint:
+        parsed.lint = parse_lint_xml(text, workspace)
+        if parsed.lint and parsed.lint_error_count is None:
+            parsed.lint_error_count = len([f for f in parsed.lint if f.severity in ("error", "fatal")])
+            parsed.lint_warning_count = len(parsed.lint) - parsed.lint_error_count
     return parsed
 
 
