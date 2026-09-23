@@ -35,9 +35,11 @@ class DetectionHealthTest {
     }
 
     @Test
-    fun `no wake lock for a wake-up sensor, screen off or on`() {
-        // A wake-up accelerometer wakes the processor per event, so it needs no
-        // help — which is why it is preferred when the device has one.
+    fun `no wake lock when every sensor in use is a wake-up sensor`() {
+        // A wake-up sensor wakes the processor per event, so it needs no help —
+        // which is why one is preferred when the device has it. "Every" is the
+        // bar: the pocket guard's proximity sensor almost never is one, and a
+        // single non-wake-up listener freezes with the screen off.
         assertFalse(needsWakeLock(armed = true, usesWakeUpSensor = true, screenIsOn = false))
         assertFalse(needsWakeLock(armed = true, usesWakeUpSensor = true, screenIsOn = true))
     }

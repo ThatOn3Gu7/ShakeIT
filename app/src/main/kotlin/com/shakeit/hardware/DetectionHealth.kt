@@ -31,9 +31,11 @@ enum class DetectionStatus {
  *
  * - **Not armed:** nothing to keep alive. Holding a lock while idle is the
  *   classic way an app ends up on a battery-usage report.
- * - **Wake-up sensor:** it wakes the application processor itself for every
- *   event, so a lock would add nothing. This is why a wake-up accelerometer is
- *   preferred when the device exposes one.
+ * - **Wake-up sensors:** every sensor in use wakes the application processor
+ *   itself for each event, so a lock would add nothing. This is why a wake-up
+ *   accelerometer is preferred when the device exposes one — and why "every
+ *   sensor" is the bar: the pocket guard's proximity sensor almost never is one,
+ *   and a single non-wake-up listener is enough to freeze with the screen off.
  * - **Screen on:** the processor is awake already, and samples are arriving
  *   without help.
  *
@@ -44,7 +46,11 @@ enum class DetectionStatus {
  * @param screenIsOn `PowerManager.isInteractive`; when there is no power manager
  *   to ask, callers should pass true so no lock is taken that cannot be managed
  */
-fun needsWakeLock(armed: Boolean, usesWakeUpSensor: Boolean, screenIsOn: Boolean): Boolean =
+fun needsWakeLock(
+    armed: Boolean,
+    usesWakeUpSensor: Boolean,
+    screenIsOn: Boolean,
+): Boolean =
     armed && !usesWakeUpSensor && !screenIsOn
 
 /**
