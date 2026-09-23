@@ -172,7 +172,18 @@ class ShakeItState(initial: ShakeItSnapshot) {
     var shakeRequest by mutableIntStateOf(0)
         private set
 
-    var sensitivity by mutableIntStateOf(initial.sensitivity)
+    /**
+     * Backing value for [sensitivity]. Private so the clamp in [setSensitivity]
+     * cannot be bypassed — and because a public `var sensitivity` would generate
+     * its own `setSensitivity(int)` accessor and clash with that function's JVM
+     * signature.
+     */
+    private var sensitivityValue by mutableIntStateOf(initial.sensitivity)
+
+    /** The range input's current value. Change it through [setSensitivity]. */
+    val sensitivity: Int
+        get() = sensitivityValue
+
     var gesture by mutableStateOf(initial.gesture)
     var detectionActive by mutableStateOf(initial.detectionActive)
     var autoOffAfterFiveMinutes by mutableStateOf(initial.autoOffAfterFiveMinutes)
@@ -185,8 +196,13 @@ class ShakeItState(initial: ShakeItSnapshot) {
     val sensitivityLabel: String
         get() = Sensitivity.label(sensitivity)
 
+    /**
+     * `<input type="range" min="1" max="5">` cannot produce an out-of-range
+     * value, and neither can this — a corrupted preference is clamped back
+     * inside the bounds the label table covers.
+     */
     fun setSensitivity(value: Int) {
-        sensitivity = value.coerceIn(Sensitivity.MIN, Sensitivity.MAX)
+        sensitivityValue = value.coerceIn(Sensitivity.MIN, Sensitivity.MAX)
     }
 
     fun toggleTorch() {

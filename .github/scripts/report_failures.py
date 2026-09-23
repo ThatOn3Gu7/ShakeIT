@@ -36,6 +36,7 @@ API_ROOT = "https://api.github.com"
 MAX_FINDINGS_PER_JOB = 40
 MAX_GRADLE_BLOCK_LINES = 45
 MAX_MESSAGE_LINES = 4
+MAX_DETAIL_LINES = 4
 MAX_STACK_FRAMES = 3
 MAX_COMMENT_CHARS = 60_000
 
@@ -67,9 +68,9 @@ class Finding:
         return (self.path, self.line, self.message, self.severity)
 
     def render(self) -> str:
-        if self.line is None:
-            return self.message
-        return f"{self.path}:{self.line}: {self.message}"
+        prefix = f"{self.path}:{self.line}: " if self.line is not None else ""
+        first, *rest = self.message.splitlines()
+        return "\n".join([prefix + first] + ["    " + part for part in rest])
 
 
 @dataclass(frozen=True)
@@ -238,6 +239,25 @@ def parse_lint_xml(text: str, workspace: str) -> list[Finding]:
     return dedupe(findings)
 
 
+def collect_diagnostic_detail(lines: list[str], start: int) -> tuple[list[str], int]:
+    """Reads the indented lines a Kotlin diagnostic continues onto.
+
+    "Platform declaration clash" and friends name the conflicting declarations
+    underneath the `e:` line, and without them the report is not actionable.
+    """
+    detail: list[str] = []
+    index = start
+    while index < len(lines) and len(detail) < MAX_DETAIL_LINES:
+        line = lines[index]
+        if not line.startswith((" ", "\t")) or not line.strip():
+            break
+        if line.lstrip().startswith("> Task"):
+            break
+        detail.append(line.strip())
+        index += 1
+    return detail, index
+
+
 def parse_log(path: Path, workspace: str) -> ParsedLog:
     text = path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
@@ -250,16 +270,20 @@ def parse_log(path: Path, workspace: str) -> ParsedLog:
 
         if match := KOTLIN_DIAGNOSTIC.match(line):
             if match["severity"] == "e":
+                detail, index = collect_diagnostic_detail(lines, index + 1)
+                message = match["message"].strip()
+                if detail:
+                    message = "\n".join([message] + detail)
                 parsed.compiler.append(
                     Finding(
                         path=relative(match["path"], workspace),
                         line=int(match["line"]),
-                        message=match["message"].strip(),
+                        message=message,
                     )
                 )
             else:
                 parsed.warning_count += 1
-            index += 1
+                index += 1
             continue
 
         if match := FAILED_TASK.match(stripped):
@@ -389,62 +413,99 @@ def truncate_findings(findings: list[Finding]) -> list[str]:
     return rendered
 
 
-def job_section(outcome: JobOutcome) -> str:
+def plural(count: int, noun: str) -> str:
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def job_section(outcome: JobOutcome, seen: set) -> str:
+    """Renders one failed job.
+
+    [seen] carries what earlier jobs already showed. All three jobs compile the
+    same sources, so one Kotlin error would otherwise be printed three times and
+    bury the job that has something different to say.
+    """
     parsed = outcome.parsed
-    parts: list[str] = []
+    heading = f"### {outcome.icon} {outcome.check.name} — `{outcome.check.task}`"
 
     if parsed is None:
-        parts.append(
-            f"### {outcome.icon} {outcome.check.name} — {outcome.conclusion}\n\n"
+        return (
+            f"{heading}\n\n"
             "No build log was uploaded for this job, so nothing could be extracted. "
             "Open the job log for the raw output."
         )
-        return "\n\n".join(parts)
 
-    heading = f"### {outcome.icon} {outcome.check.name} — `{outcome.check.task}`"
-    parts.append(heading)
+    parts = [heading]
+    repeated: list[str] = []
 
-    if parsed.tests:
-        parts.append(f"**{len(parsed.tests)} failing test(s)**\n\n" + fence(
-            [line for test in parsed.tests for line in test.render().splitlines()]
-        ))
+    def take(findings: list[Finding], noun: str) -> list[Finding]:
+        """Returns the findings no earlier job showed, recording them as shown."""
+        fresh = [f for f in findings if ("finding",) + f.key() not in seen]
+        if len(fresh) < len(findings):
+            repeated.append(plural(len(findings) - len(fresh), noun))
+        seen.update(("finding",) + f.key() for f in fresh)
+        return fresh
 
-    if parsed.compiler:
-        label = "compiler error" if len(parsed.compiler) == 1 else "compiler errors"
+    new_tests = [test for test in parsed.tests if ("test", test.test_class, test.name) not in seen]
+    if len(new_tests) < len(parsed.tests):
+        repeated.append(plural(len(parsed.tests) - len(new_tests), "failing test"))
+    seen.update(("test", test.test_class, test.name) for test in new_tests)
+    if new_tests:
         parts.append(
-            f"**{len(parsed.compiler)} Kotlin {label}**\n\n"
-            + fence(truncate_findings(parsed.compiler))
+            f"**{plural(len(new_tests), 'failing test')}**\n\n"
+            + fence([line for test in new_tests for line in test.render().splitlines()])
         )
 
-    if parsed.resources:
+    new_compiler = take(parsed.compiler, "compiler error")
+    if new_compiler:
         parts.append(
-            f"**{len(parsed.resources)} resource error(s)**\n\n"
-            + fence(truncate_findings(parsed.resources))
+            f"**{plural(len(new_compiler), 'Kotlin compiler error')}**\n\n"
+            + fence(truncate_findings(new_compiler))
+        )
+
+    new_resources = take(parsed.resources, "resource error")
+    if new_resources:
+        parts.append(
+            f"**{plural(len(new_resources), 'resource error')}**\n\n"
+            + fence(truncate_findings(new_resources))
         )
 
     lint_errors = [finding for finding in parsed.lint if finding.severity == "error"]
     lint_warnings = [finding for finding in parsed.lint if finding.severity != "error"]
-    if lint_errors:
+    new_lint_errors = take(lint_errors, "lint error")
+    if new_lint_errors:
         parts.append(
-            f"**{len(lint_errors)} lint error(s)**\n\n" + fence(truncate_findings(lint_errors))
+            f"**{plural(len(new_lint_errors), 'lint error')}**\n\n"
+            + fence(truncate_findings(new_lint_errors))
         )
-    if lint_warnings:
-        summary = parsed.lint_warning_count
-        count = summary if summary is not None else len(lint_warnings)
+    new_lint_warnings = take(lint_warnings, "lint warning")
+    if new_lint_warnings:
+        count = (
+            parsed.lint_warning_count
+            if parsed.lint_warning_count is not None
+            else len(new_lint_warnings)
+        )
         parts.append(
-            f"<details>\n<summary>{count} lint warning(s) — not blocking</summary>\n\n"
-            + fence(truncate_findings(lint_warnings))
+            f"<details>\n<summary>{plural(count, 'lint warning')} — not blocking</summary>\n\n"
+            + fence(truncate_findings(new_lint_warnings))
             + "\n\n</details>"
         )
 
     if parsed.gradle_block:
-        parts.append(
-            "<details>\n<summary>Gradle failure summary</summary>\n\n"
-            + fence(parsed.gradle_block)
-            + "\n\n</details>"
-        )
+        key = ("gradle",) + tuple(parsed.gradle_block)
+        if key in seen:
+            repeated.append("Gradle failure summary")
+        else:
+            seen.add(key)
+            parts.append(
+                "<details>\n<summary>Gradle failure summary</summary>\n\n"
+                + fence(parsed.gradle_block)
+                + "\n\n</details>"
+            )
 
-    if not parsed.tests and not parsed.compiler and not parsed.resources and not lint_errors:
+    if repeated:
+        parts.append("_" + ", ".join(repeated) + " identical to the ones listed above._")
+
+    if not (parsed.tests or parsed.compiler or parsed.resources or lint_errors):
         # The job failed without producing anything recognisable: a crash, an
         # out-of-memory kill, a missing SDK package. Say so rather than nothing.
         reason = parsed.build_result or "the build did not report a recognisable error"
@@ -510,7 +571,9 @@ def build_comment(
     ]
 
     if failed:
-        parts.extend(job_section(outcome) for outcome in failed)
+        # Threaded through the jobs in order so a shared error is printed once.
+        seen: set = set()
+        parts.extend(job_section(outcome, seen) for outcome in failed)
         parts.append(
             "---\n"
             "Raw logs: "
