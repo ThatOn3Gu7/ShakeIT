@@ -1,3 +1,15 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.ComposeEmptyActivity" parent="android:Theme.Material.Light.NoActionBar" />
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Window theme. The Compose UI paints its own background, but the platform
+      theme still decides what is visible before the first frame and how the
+      status bar icons are coloured, so it has to agree with the resolved
+      Compose theme. `values-night/themes.xml` carries the dark counterpart.
+
+      `android:Theme.Material.*` is used rather than an AppCompat or Material 3
+      parent because neither library is in this project's dependency set.
+    -->
+    <style name="Theme.ShakeIT" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/shakeit_window_background</item>
+    </style>
 </resources>

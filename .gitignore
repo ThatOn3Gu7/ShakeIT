@@ -1,1 +1,21 @@
+# Gradle
 /.gradle
+**/build/
+!src/**/build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.cxx/
+captures/
+.externalNativeBuild/
+
+# Local configuration (SDK path, signing, per-machine overrides)
+local.properties
+
+# Kotlin
+.kotlin/
+
+# Keystores — never commit signing material
+*.jks
+*.keystore
