@@ -37,10 +37,11 @@ android {
     }
 
     lint {
-        // CI reads the text report out of the build log and the XML report out of
-        // the build directory, so both are always produced.
+        // Lint writes its findings to files rather than to the console, so all
+        // three reports are produced and CI splices the text one into the build
+        // log it parses. (`textOutput` is a File? here, and the "stdout" trick
+        // only exists in the Groovy DSL.)
         textReport = true
-        textOutput = "stdout"
         xmlReport = true
         htmlReport = true
         // Lint errors fail the build; warnings are surfaced but tolerated. This
