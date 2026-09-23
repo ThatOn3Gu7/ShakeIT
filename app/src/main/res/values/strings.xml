@@ -33,7 +33,6 @@
 
     <!-- Home status -->
     <string name="status_detection_stalled">Stalled — check battery settings</string>
-    <string name="status_detection_unavailable">No accelerometer on this device</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
