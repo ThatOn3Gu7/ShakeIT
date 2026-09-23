@@ -1,10 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Reserved for the background detection service, which is not wired up yet. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!--
+      No CAMERA permission on purpose. CameraManager.setTorchMode() drives the
+      flash as a torch without opening the camera, which the platform allows
+      without it — so ShakeIT never asks for something it does not need.
+    -->
+
+    <!-- Keeps shake detection running with the screen off or the app backgrounded. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Android 13+: the service still runs without it, the notification is just hidden. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- One short tick when the torch really changes state. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!--
+      Every one of these degrades instead of failing: no flash means the tap
+      does nothing, no accelerometer means only the tap works, and no proximity
+      sensor means the pocket guard is simply not applied.
+    -->
+    <uses-feature
+        android:name="android.hardware.camera.flash"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.sensor.accelerometer"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.sensor.proximity"
+        android:required="false" />
 
     <application
+        android:name=".ShakeItApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -20,6 +47,26 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          None of the platform's foreground service types describe "read the
+          accelerometer while the screen is off", which is what specialUse is
+          for; the property below states the reason, as Android 14 requires.
+        -->
+        <service
+            android:name=".service.ShakeItService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Recognises a deliberate shake from the accelerometer while the screen is off, locked or the app is backgrounded, so the user can toggle the flashlight without unlocking." />
+        </service>
+
+        <!-- Handles the notification's Stop action; stopping a service is
+               allowed from any app state, starting one from the background is not. -->
+        <receiver
+            android:name=".service.StopDetectionReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

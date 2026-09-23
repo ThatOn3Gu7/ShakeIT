@@ -21,6 +21,14 @@
     <string name="stat_time_on_today_value">12m</string>
     <string name="stat_avg_session_value">1.7m</string>
 
+    <!-- Foreground service notification -->
+    <string name="notification_channel_name">Shake detection</string>
+    <string name="notification_channel_description">Stays visible while ShakeIT listens for shakes in the background.</string>
+    <string name="notification_listening">Listening for shakes — torch off</string>
+    <string name="notification_torch_on">Listening for shakes — torch on</string>
+    <string name="notification_covered">Paused — phone looks covered</string>
+    <string name="notification_stop">Stop</string>
+
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="group_shake_mechanics">Shake mechanics</string>

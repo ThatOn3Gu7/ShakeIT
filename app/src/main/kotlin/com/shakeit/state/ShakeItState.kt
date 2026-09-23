@@ -38,7 +38,15 @@ object Sensitivity {
     fun label(value: Int): String = LABELS[(value - MIN).coerceIn(0, LABELS.lastIndex)]
 }
 
-/** Everything that survives a process restart. */
+/**
+ * Everything that survives a process restart.
+ *
+ * `torchOn` is deliberately *not* here. It is hardware state, not a preference:
+ * the camera service drops the torch when its client dies, so a persisted `true`
+ * would be a lie at the next launch — and since the blob animates towards its
+ * target, that lie would play out as a visible OFF morph on every cold start.
+ * The screen starts at "off" and is corrected by the hardware mirror.
+ */
 @Immutable
 data class ShakeItSnapshot(
     val sensitivity: Int,
@@ -50,7 +58,6 @@ data class ShakeItSnapshot(
     val themeMode: ThemeMode,
     val dynamicColor: Boolean,
     val shizukuConnected: Boolean,
-    val torchOn: Boolean,
     val activations: Int,
 )
 
@@ -74,14 +81,13 @@ val DefaultShakeItSnapshot = ShakeItSnapshot(
     themeMode = ThemeMode.System,
     dynamicColor = true,
     shizukuConnected = false,
-    torchOn = false,
     activations = 7,
 )
 
 /**
  * Backing store. `SharedPreferences` keeps the prototype dependency-free while
- * still making settings (and the torch/activation counters) survive a restart,
- * which `rememberSaveable` alone would not.
+ * still making settings (and the activation counter) survive a restart, which
+ * `rememberSaveable` alone would not.
  */
 class ShakeItStore(context: Context) {
 
@@ -99,7 +105,6 @@ class ShakeItStore(context: Context) {
         themeMode = readThemeMode(KEY_THEME_MODE, fallback.themeMode),
         dynamicColor = prefs.getBoolean(KEY_DYNAMIC_COLOR, fallback.dynamicColor),
         shizukuConnected = prefs.getBoolean(KEY_SHIZUKU_CONNECTED, fallback.shizukuConnected),
-        torchOn = prefs.getBoolean(KEY_TORCH_ON, fallback.torchOn),
         activations = prefs.getInt(KEY_ACTIVATIONS, fallback.activations),
     )
 
@@ -114,7 +119,6 @@ class ShakeItStore(context: Context) {
             .putString(KEY_THEME_MODE, snapshot.themeMode.name)
             .putBoolean(KEY_DYNAMIC_COLOR, snapshot.dynamicColor)
             .putBoolean(KEY_SHIZUKU_CONNECTED, snapshot.shizukuConnected)
-            .putBoolean(KEY_TORCH_ON, snapshot.torchOn)
             .putInt(KEY_ACTIVATIONS, snapshot.activations)
             .apply()
     }
@@ -140,7 +144,6 @@ class ShakeItStore(context: Context) {
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_DYNAMIC_COLOR = "dynamic_color"
         const val KEY_SHIZUKU_CONNECTED = "shizuku_connected"
-        const val KEY_TORCH_ON = "torch_on"
         const val KEY_ACTIVATIONS = "activations"
     }
 }
@@ -156,8 +159,14 @@ class ShakeItState(initial: ShakeItSnapshot) {
     /** Which screen is currently on top. Deliberately not persisted. */
     var screen by mutableStateOf(Screen.HOME)
 
-    /** The simulated torch. Drives the hero blob, the state word and the stats. */
-    var torchOn by mutableStateOf(initial.torchOn)
+    /**
+     * The real flashlight, mirrored from [com.shakeit.engine.ShakeItEngine].
+     * Drives the hero blob, the state word and the stats.
+     *
+     * Always starts false: the torch is off when a process starts, and the mirror
+     * corrects this the moment the hardware says otherwise.
+     */
+    var torchOn by mutableStateOf(false)
         private set
 
     /** `.stat-num` for "Activations" — incremented every time the torch turns on. */
@@ -165,11 +174,21 @@ class ShakeItState(initial: ShakeItSnapshot) {
         private set
 
     /**
-     * Bumped by [simulateShake] to request one shake. The hero observes it,
-     * plays the `@keyframes wobble` animation and toggles 380 ms in — the same
-     * sequence the prototype's "Shake to toggle" button runs.
+     * Bumped by [simulateShake] to request one shake from the screen. The hero
+     * observes it, plays the `@keyframes wobble` animation and toggles 380 ms in
+     * — the same sequence the prototype's "Shake to toggle" button runs, except
+     * that the toggle now drives real hardware.
      */
     var shakeRequest by mutableIntStateOf(0)
+        private set
+
+    /**
+     * Bumped by [onShakeDetected] when the accelerometer recognised a shake.
+     * The hero wobbles exactly like [shakeRequest] does, but must not toggle
+     * anything: the engine has already flipped the torch, so a second toggle
+     * here would put the light back the way it was.
+     */
+    var detectedShake by mutableIntStateOf(0)
         private set
 
     /**
@@ -205,9 +224,26 @@ class ShakeItState(initial: ShakeItSnapshot) {
         sensitivityValue = value.coerceIn(Sensitivity.MIN, Sensitivity.MAX)
     }
 
-    fun toggleTorch() {
-        torchOn = !torchOn
-        if (torchOn) activations++
+    /**
+     * The only write path for [torchOn]: the engine reports what the hardware
+     * did and this mirrors it. There is no `toggleTorch()` here on purpose — if
+     * the screen flipped its own copy, a torch change from a shake, from the
+     * notification or from another app would leave it showing a light that is
+     * not on.
+     *
+     * Idempotent, because a `StateFlow` hands its current value to every new
+     * collector: an activity recreated while the torch is on must not count a
+     * second activation.
+     */
+    fun onTorchStateChanged(enabled: Boolean) {
+        if (torchOn == enabled) return
+        torchOn = enabled
+        if (enabled) activations++
+    }
+
+    /** A shake was recognised by the hardware. Animation only — see [detectedShake]. */
+    fun onShakeDetected() {
+        detectedShake++
     }
 
     fun simulateShake() {
@@ -242,7 +278,6 @@ class ShakeItState(initial: ShakeItSnapshot) {
         themeMode = themeMode,
         dynamicColor = dynamicColor,
         shizukuConnected = shizukuConnected,
-        torchOn = torchOn,
         activations = activations,
     )
 

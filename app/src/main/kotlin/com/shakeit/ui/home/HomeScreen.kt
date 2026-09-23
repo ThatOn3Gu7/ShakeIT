@@ -55,6 +55,9 @@ private const val SETTINGS_GLYPH = "\u2699"
  *
  * @param shakeRequest bumping this plays one shake, mirroring the prototype's
  *   `shakeBtn` handler: start the wobble, then toggle 380ms later.
+ * @param detectedShake bumping this plays the same wobble for a shake the
+ *   accelerometer recognised, with no toggle afterwards — the hardware already
+ *   flipped the torch before this counter moved.
  * @param animateBlob false while Settings covers this screen, so the blob's
  *   frame loop parks instead of redrawing a layer nobody can see.
  */
@@ -64,6 +67,7 @@ fun HomeScreen(
     activations: Int,
     detectionActive: Boolean,
     shakeRequest: Int,
+    detectedShake: Int,
     animateBlob: Boolean,
     onToggleTorch: () -> Unit,
     onSimulateShake: () -> Unit,
@@ -97,6 +101,7 @@ fun HomeScreen(
                 stateSub = stringResource(if (torchOn) R.string.state_sub_on else R.string.state_sub_off),
                 animateBlob = animateBlob,
                 shakeRequest = shakeRequest,
+                detectedShake = detectedShake,
                 onToggleTorch = onToggleTorch,
             )
             ShakeButton(onClick = onSimulateShake)
@@ -150,6 +155,7 @@ private fun Hero(
     stateSub: String,
     animateBlob: Boolean,
     shakeRequest: Int,
+    detectedShake: Int,
     onToggleTorch: () -> Unit,
 ) {
     val colors = ShakeItTheme.colors
@@ -171,6 +177,17 @@ private fun Hero(
         // so the snap is invisible.
         delay(Wobble.TOGGLE_AT_MS)
         currentToggle()
+        wobble.snapTo(0f)
+    }
+
+    // The same wobble for a shake the sensors recognised, but with no toggle at
+    // the end: the engine flipped the torch before this counter moved, so
+    // toggling here would switch it straight back. The hero is simply shown
+    // reacting, which is what makes a shake with the screen on feel answered.
+    LaunchedEffect(detectedShake) {
+        if (detectedShake == 0) return@LaunchedEffect
+        wobble.snapTo(0f)
+        wobble.animateTo(1f, tween(Wobble.DURATION_MS, easing = LinearEasing))
         wobble.snapTo(0f)
     }
 

@@ -71,16 +71,50 @@ class ShakeItStateTest {
     fun `turning the torch on counts an activation, turning it off does not`() {
         val state = newState()
 
-        state.toggleTorch()
+        state.onTorchStateChanged(true)
         assertTrue(state.torchOn)
         assertEquals(8, state.activations)
 
-        state.toggleTorch()
+        state.onTorchStateChanged(false)
         assertFalse(state.torchOn)
         assertEquals("turning off must not count", 8, state.activations)
 
-        state.toggleTorch()
+        state.onTorchStateChanged(true)
         assertEquals(9, state.activations)
+    }
+
+    @Test
+    fun `reporting the state the screen already has counts nothing`() {
+        val state = newState()
+
+        // The hardware mirror is idempotent: a StateFlow hands its current value
+        // to every new collector, so an activity recreated while the torch is on
+        // must not read as another activation.
+        state.onTorchStateChanged(false)
+        assertEquals(7, state.activations)
+
+        state.onTorchStateChanged(true)
+        state.onTorchStateChanged(true)
+        state.onTorchStateChanged(true)
+
+        assertEquals(8, state.activations)
+    }
+
+    @Test
+    fun `a detected shake animates the hero without touching the torch`() {
+        val state = newState()
+        assertEquals(0, state.detectedShake)
+
+        state.onShakeDetected()
+        state.onShakeDetected()
+
+        // The counter must keep moving so consecutive shakes are each noticed.
+        assertEquals(2, state.detectedShake)
+        // The engine flipped the torch before it bumped this counter, so the
+        // screen animating must not flip it back.
+        assertFalse("a detected shake must not toggle the torch", state.torchOn)
+        assertEquals(7, state.activations)
+        assertEquals("a real shake is not a request from the button", 0, state.shakeRequest)
     }
 
     @Test
@@ -198,14 +232,17 @@ class ShakeItStateTest {
         state.themeMode = ThemeMode.Dark
         state.dynamicColor = false
         state.connectShizuku()
-        state.toggleTorch()
+        state.onTorchStateChanged(true)
 
         val snapshot = state.snapshot()
         val restored = ShakeItState(snapshot)
 
         assertEquals(snapshot, restored.snapshot())
-        assertTrue(restored.torchOn)
-        assertEquals(8, restored.activations)
+        // The torch itself is hardware state, so it is not restored — a
+        // persisted "on" would be a lie at the next launch, and the blob would
+        // spend its first second morphing back to OFF.
+        assertFalse(restored.torchOn)
+        assertEquals("but what it did is still counted", 8, restored.activations)
         assertEquals(ShakeGesture.DoubleShake, restored.gesture)
         assertEquals(ThemeMode.Dark, restored.themeMode)
         assertTrue(restored.shizukuConnected)
@@ -227,11 +264,10 @@ class ShakeItStateTest {
         val before = state.snapshot()
 
         state.setSensitivity(1)
-        state.toggleTorch()
+        state.onTorchStateChanged(true)
         state.themeMode = ThemeMode.Light
 
         assertEquals(3, before.sensitivity)
-        assertFalse(before.torchOn)
         assertEquals(ThemeMode.System, before.themeMode)
         assertEquals(DefaultShakeItSnapshot, before)
         assertNotEquals(before, state.snapshot())

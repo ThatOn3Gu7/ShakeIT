@@ -94,6 +94,7 @@ private fun HomeScreenPreview(torchOn: Boolean) {
         activations = DefaultShakeItSnapshot.activations,
         detectionActive = true,
         shakeRequest = 0,
+        detectedShake = 0,
         // Frozen in previews: the frame loop would otherwise keep the preview
         // redrawing indefinitely.
         animateBlob = false,
