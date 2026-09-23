@@ -19,3 +19,7 @@ local.properties
 # Keystores — never commit signing material
 *.jks
 *.keystore
+
+# Python — the CI report script's compiled bytecode
+__pycache__/
+*.py[cod]

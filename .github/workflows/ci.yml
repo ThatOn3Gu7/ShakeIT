@@ -1,0 +1,192 @@
+name: CI
+
+# Path filtering is deliberate: a push that only touches the README, the design
+# mockup or other documentation gets no runner time at all.
+#
+# Feature branches are covered by the `pull_request` trigger rather than `push`,
+# so a commit on a branch with an open pull request produces exactly one run and
+# one report comment instead of two racing ones.
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - 'gradle.properties'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/**'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - 'gradle.properties'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/**'
+  workflow_dispatch:
+
+# A newer push to the same ref supersedes the run in flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Every Gradle invocation tees its output into this file, which is uploaded as
+  # an artifact for the report job to parse.
+  GRADLE_LOG: build.log
+  GRADLE_ARGS: --console=plain --stacktrace
+
+jobs:
+  # The three checks below are independent on purpose: `assemble-debug` must run
+  # even when the tests or lint fail, because "does it compile" is the question
+  # that decides what gets fixed next. Adding `needs:` here would break that.
+  unit-tests:
+    name: Unit tests (JVM)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/prepare-build
+
+      - name: Run the JVM unit tests
+        shell: bash
+        run: |
+          set -uo pipefail
+          ./gradlew $GRADLE_ARGS :app:testDebugUnitTest 2>&1 | tee "$GRADLE_LOG"
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-unit-tests
+          path: ${{ env.GRADLE_LOG }}
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload the test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+          if-no-files-found: warn
+          retention-days: 7
+
+  lint:
+    name: Android Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/prepare-build
+
+      - name: Run Android Lint
+        shell: bash
+        run: |
+          set -uo pipefail
+          ./gradlew $GRADLE_ARGS :app:lintDebug 2>&1 | tee "$GRADLE_LOG"
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-lint
+          path: ${{ env.GRADLE_LOG }}
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload the lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports
+          path: |
+            app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-debug.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+  assemble-debug:
+    name: Compile debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/prepare-build
+
+      - name: Compile and package the debug build
+        shell: bash
+        run: |
+          set -uo pipefail
+          ./gradlew $GRADLE_ARGS :app:assembleDebug 2>&1 | tee "$GRADLE_LOG"
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-assemble-debug
+          path: ${{ env.GRADLE_LOG }}
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload the APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  report:
+    name: Report failures on the pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [unit-tests, lint, assemble-debug]
+    # Runs whatever the three checks did, so a red build always leaves an
+    # explanation behind instead of a bare cross.
+    if: always() && !cancelled()
+    permissions:
+      contents: read
+      # Upserting the report comment on the pull request.
+      pull-requests: write
+      # Reading the run's job conclusions and their log URLs.
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the build logs
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          path: ci-logs
+          pattern: logs-*
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Post or refresh the failure report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/report_failures.py --logs ci-logs

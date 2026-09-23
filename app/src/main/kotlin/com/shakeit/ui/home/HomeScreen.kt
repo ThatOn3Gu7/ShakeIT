@@ -1,7 +1,6 @@
 package com.shakeit.ui.home
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -49,19 +48,6 @@ private val ShakeButtonShape = RoundedCornerShape(22.dp)
 /** `◐` and `⚙` — the same glyphs the prototype renders. */
 private const val THEME_GLYPH = "\u25D0"
 private const val SETTINGS_GLYPH = "\u2699"
-
-/** `.hero.shaking { animation: wobble .4s ease }`, toggled 380ms in. */
-private const val WOBBLE_DURATION_MS = 400
-private const val WOBBLE_TOGGLE_AT_MS = 380L
-
-/**
- * `@keyframes wobble`. A CSS `animation-timing-function` applies *per keyframe
- * interval*, so each segment below is eased on its own local fraction.
- */
-private val WobbleEase = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
-private val WobbleTimes = floatArrayOf(0f, 0.20f, 0.45f, 0.70f, 1f)
-private val WobbleRotation = floatArrayOf(0f, -7f, 6f, -4f, 0f)
-private val WobbleTranslationX = floatArrayOf(0f, -3f, 3f, 0f, 0f)
 
 /**
  * The `#home` screen: status pill plus theme and settings actions, the hero
@@ -177,13 +163,13 @@ private fun Hero(
         if (shakeRequest == 0) return@LaunchedEffect
         launch {
             wobble.snapTo(0f)
-            wobble.animateTo(1f, tween(WOBBLE_DURATION_MS, easing = LinearEasing))
+            wobble.animateTo(1f, tween(Wobble.DURATION_MS, easing = LinearEasing))
         }
         // The prototype removes `.shaking` and toggles inside the same 380ms
         // timeout, which snaps the transform back to rest a beat before the
         // state flips. At 95% of the curve the remaining rotation is ~0.1deg,
         // so the snap is invisible.
-        delay(WOBBLE_TOGGLE_AT_MS)
+        delay(Wobble.TOGGLE_AT_MS)
         currentToggle()
         wobble.snapTo(0f)
     }
@@ -194,12 +180,12 @@ private fun Hero(
             // invalidates only this layer and never triggers recomposition.
             .graphicsLayer {
                 val progress = wobble.value
-                val rotation = sampleKeyframes(WobbleTimes, WobbleRotation, progress)
+                val rotation = Wobble.rotationAt(progress)
                 rotationZ = rotation
                 // CSS `rotate(θ) translateX(d)` composes as
                 // translate(d·cosθ, d·sinθ) then rotate(θ), which is the order
                 // `graphicsLayer` applies in.
-                val offset = sampleKeyframes(WobbleTimes, WobbleTranslationX, progress).dp.toPx()
+                val offset = Wobble.translationXAt(progress).dp.toPx()
                 val radians = rotation * (PI.toFloat() / 180f)
                 translationX = offset * cos(radians)
                 translationY = offset * sin(radians)
@@ -307,16 +293,4 @@ private fun Stat(value: String, label: String) {
         Text(text = value, style = ShakeItType.statNumber, color = colors.onSurface)
         Text(text = label, style = ShakeItType.statLabel, color = colors.onSurfaceVariant)
     }
-}
-
-/** Interpolates the prototype's CSS keyframes, easing each segment separately. */
-private fun sampleKeyframes(times: FloatArray, values: FloatArray, progress: Float): Float {
-    val p = progress.coerceIn(0f, 1f)
-    var index = 0
-    while (index < times.lastIndex - 1 && p >= times[index + 1]) index++
-
-    val span = times[index + 1] - times[index]
-    val local = if (span <= 0f) 1f else ((p - times[index]) / span).coerceIn(0f, 1f)
-    val eased = WobbleEase.transform(local)
-    return values[index] + (values[index + 1] - values[index]) * eased
 }
