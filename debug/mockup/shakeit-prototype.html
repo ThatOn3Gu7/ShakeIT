@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ShakeIT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;800&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F6F1FB; --surface:#FFFFFF; --surface-2:#ECE3F8; --on-surface:#1C1A20; --on-var:#68626F; --outline:#DED4EC;
+  --primary:#473C70; --on-primary:#F5EEFF; --accent:#FFB238; --on-accent:#241900; --glow:255,178,56;
+  --track-off:#D9D0E8; --track-on:#8B7FC2;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#121016; --surface:#1C1A22; --surface-2:#25222F; --on-surface:#ECE5F5; --on-var:#A79EB5; --outline:#332F3E;
+    --primary:#8377BC; --on-primary:#1A1630; --accent:#FFB238; --on-accent:#241900;
+    --track-off:#3A3546; --track-on:#8377BC;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121016; --surface:#1C1A22; --surface-2:#25222F; --on-surface:#ECE5F5; --on-var:#A79EB5; --outline:#332F3E;
+  --primary:#8377BC; --on-primary:#1A1630; --accent:#FFB238; --on-accent:#241900;
+  --track-off:#3A3546; --track-on:#8377BC;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:#0B0A0D;font-family:Roboto,system-ui,sans-serif;color:var(--on-surface);display:flex;align-items:center;justify-content:center;min-height:100vh;padding:28px 12px}
+.phone{width:100%;max-width:390px;height:min(844px,92vh);background:#050408;border-radius:48px;padding:12px;box-shadow:0 30px 70px rgba(0,0,0,.55)}
+.screen-clip{width:100%;height:100%;background:var(--bg);border-radius:38px;overflow:hidden;position:relative;transition:background .35s}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;padding:18px 20px calc(20px + env(safe-area-inset-bottom,0px));transition:transform .3s ease,opacity .3s ease}
+.screen.hidden{opacity:0;pointer-events:none;transform:translateX(16px)}
+#settings.screen{transform:translateX(0)}
+#settings.hidden{transform:translateX(16px)}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;min-height:40px;padding-top:env(safe-area-inset-top,0px)}
+.status-pill{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--on-var);background:var(--surface-2);padding:6px 12px 6px 10px;border-radius:20px}
+.dot{width:7px;height:7px;border-radius:50%;background:#3DC26B;box-shadow:0 0 0 3px rgba(61,194,107,.18)}
+.topbar-actions{display:flex;gap:6px}
+.icon-btn{width:38px;height:38px;border-radius:50%;border:none;background:var(--surface-2);color:var(--on-surface);font-size:17px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s}
+.icon-btn:active{background:var(--outline)}
+#settings h1{font-family:Manrope;font-weight:800;font-size:20px;flex:1;text-align:center}
+
+.hero-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:10px 0}
+.hero{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:22px;padding:10px}
+.hero-blob{width:190px;height:190px}
+.hero-blob svg{width:100%;height:100%;overflow:visible}
+#blobPath{fill:var(--primary);transition:fill .5s ease,filter .5s ease;filter:none}
+#blobPath.on{fill:var(--accent);filter:drop-shadow(0 0 22px rgba(var(--glow),.55))}
+.hero.shaking{animation:wobble .4s ease}
+@keyframes wobble{0%,100%{transform:rotate(0)}20%{transform:rotate(-7deg) translateX(-3px)}45%{transform:rotate(6deg) translateX(3px)}70%{transform:rotate(-4deg)}}
+.hero-label{display:flex;flex-direction:column;align-items:center;gap:5px}
+.state-word{font-family:Manrope;font-weight:800;font-size:38px;letter-spacing:.5px;transition:color .3s}
+.state-sub{font-size:13.5px;color:var(--on-var)}
+.shake-btn{border:1.5px solid var(--outline);background:var(--surface);color:var(--on-surface);font:500 13.5px Roboto;padding:10px 22px;border-radius:22px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.shake-btn:active{background:var(--surface-2)}
+
+.stats-row{display:flex;justify-content:space-around;padding:14px 6px 4px;border-top:1px solid var(--outline)}
+.stat{display:flex;flex-direction:column;align-items:center;gap:2px}
+.stat-num{font-family:Manrope;font-weight:700;font-size:16px}
+.stat-label{font-size:11px;color:var(--on-var)}
+
+.settings-scroll{flex:1;overflow-y:auto;padding-top:6px}
+.group{padding:18px 2px}
+.group + .group{border-top:1px solid var(--outline)}
+.group h2{font-size:12.5px;font-weight:700;letter-spacing:.2px;color:var(--primary);margin-bottom:10px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:9px 0}
+.row-text{display:flex;flex-direction:column;gap:1px}
+.row-text small{color:var(--on-var);font-size:12px}
+.row-text-block{display:flex;flex-direction:column;gap:3px;margin-bottom:10px}
+.row-text-block small{color:var(--on-var);font-size:12.5px;line-height:1.4}
+.slider{width:100%;accent-color:var(--primary);margin:4px 0 14px}
+.segmented{display:flex;background:var(--surface-2);border-radius:14px;padding:3px;gap:3px;margin-bottom:8px}
+.seg-btn{flex:1;border:none;background:none;color:var(--on-var);font:500 12.5px Roboto;padding:9px 4px;border-radius:11px;cursor:pointer;transition:background .15s,color .15s}
+.seg-btn.active{background:var(--surface);color:var(--primary);font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.switch-row span{font-size:14px}
+.switch{width:44px;height:26px;border-radius:14px;border:none;background:var(--track-off);position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
+.switch .knob{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.switch.on{background:var(--track-on)}
+.switch.on .knob{transform:translateX(18px)}
+.outline-btn{width:100%;border:1.5px solid var(--outline);background:none;color:var(--primary);font:600 13.5px Roboto;padding:11px;border-radius:14px;cursor:pointer;margin-bottom:10px}
+.fine-print{font-size:11.5px;color:var(--on-var);line-height:1.5}
+</style>
+</head>
+<body>
+<div class="phone"><div class="screen-clip">
+
+  <section class="screen" id="home">
+    <div class="topbar">
+      <div class="status-pill"><span class="dot"></span><span id="statusText">Shake detection active</span></div>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="themeBtn" aria-label="Toggle theme">◐</button>
+        <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+      </div>
+    </div>
+    <div class="hero-wrap">
+      <button class="hero" id="heroBtn">
+        <div class="hero-blob">
+          <svg viewBox="-100 -100 200 200"><path id="blobPath"/></svg>
+        </div>
+        <div class="hero-label">
+          <span class="state-word" id="stateWord">OFF</span>
+          <span class="state-sub" id="stateSub">Tap or shake to turn on</span>
+        </div>
+      </button>
+      <button class="shake-btn" id="shakeBtn">〰️ Shake to toggle</button>
+    </div>
+    <div class="stats-row">
+      <div class="stat"><span class="stat-num" id="statActivations">7</span><span class="stat-label">Activations</span></div>
+      <div class="stat"><span class="stat-num">12m</span><span class="stat-label">Time on today</span></div>
+      <div class="stat"><span class="stat-num">1.7m</span><span class="stat-label">Avg session</span></div>
+    </div>
+  </section>
+
+  <section class="screen hidden" id="settings">
+    <div class="topbar">
+      <button class="icon-btn" id="backBtn" aria-label="Back">←</button>
+      <h1>Settings</h1>
+      <div style="width:38px"></div>
+    </div>
+    <div class="settings-scroll">
+      <div class="group">
+        <h2>Shake mechanics</h2>
+        <div class="row"><div class="row-text"><span>Sensitivity</span><small id="sensLabel">Medium</small></div></div>
+        <input type="range" class="slider" min="1" max="5" value="3" id="sensSlider">
+        <div class="segmented" id="gestureSeg">
+          <button class="seg-btn active" data-val="shake">Shake</button>
+          <button class="seg-btn" data-val="double">Double-shake</button>
+          <button class="seg-btn" data-val="flip">Flip & shake</button>
+        </div>
+        <div class="row switch-row"><span>Detection active</span><button class="switch on" id="detectSwitch"><span class="knob"></span></button></div>
+      </div>
+      <div class="group">
+        <h2>Flashlight & reliability</h2>
+        <div class="row switch-row"><span>Auto-off after 5 min</span><button class="switch" id="autoOffSwitch"><span class="knob"></span></button></div>
+        <div class="row switch-row"><span>Start after reboot</span><button class="switch on" id="rebootSwitch"><span class="knob"></span></button></div>
+        <div class="row switch-row"><span>Run in background</span><button class="switch on" id="bgSwitch"><span class="knob"></span></button></div>
+      </div>
+      <div class="group">
+        <h2>Appearance</h2>
+        <div class="segmented" id="themeSeg">
+          <button class="seg-btn active" data-val="light">Light</button>
+          <button class="seg-btn" data-val="dark">Dark</button>
+          <button class="seg-btn" data-val="system">System</button>
+        </div>
+        <div class="row switch-row"><span>Dynamic color</span><button class="switch on" id="dynSwitch"><span class="knob"></span></button></div>
+      </div>
+      <div class="group">
+        <h2>Advanced</h2>
+        <div class="row-text-block"><span>Shizuku</span><small>Not connected — can improve background reliability beyond standard Android limits.</small></div>
+        <button class="outline-btn" id="shizukuBtn">Connect Shizuku</button>
+        <p class="fine-print">Some background behavior is limited by your device manufacturer, not by ShakeIT.</p>
+      </div>
+    </div>
+  </section>
+
+</div></div>
+
+<script>
+const html=document.documentElement;
+const hero=document.getElementById('heroBtn'),stateWord=document.getElementById('stateWord'),stateSub=document.getElementById('stateSub');
+let isOn=false, activations=7;
+const blobPath=document.getElementById('blobPath');
+const OFF_CFG={lobes:4,amp:.16,radius:82}, ON_CFG={lobes:10,amp:.085,radius:90};
+let cur={...OFF_CFG}, target={...OFF_CFG}, wobble=0;
+function smoothPath(pts){
+  let d=`M ${pts[0][0]},${pts[0][1]} `,n=pts.length;
+  for(let i=0;i<n;i++){
+    const p0=pts[(i-1+n)%n],p1=pts[i],p2=pts[(i+1)%n],p3=pts[(i+2)%n];
+    const c1x=p1[0]+(p2[0]-p0[0])/6,c1y=p1[1]+(p2[1]-p0[1])/6;
+    const c2x=p2[0]-(p3[0]-p1[0])/6,c2y=p2[1]-(p3[1]-p1[1])/6;
+    d+=`C ${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]} `;
+  }
+  return d+'Z';
+}
+function frame(){
+  cur.lobes+=(target.lobes-cur.lobes)*.1;
+  cur.amp+=(target.amp-cur.amp)*.1;
+  cur.radius+=(target.radius-cur.radius)*.1;
+  wobble+=.018;
+  const N=40,pts=[];
+  for(let i=0;i<N;i++){
+    const a=i/N*Math.PI*2;
+    const r=cur.radius*(1+cur.amp*Math.sin(cur.lobes*a+wobble*1.3)+.03*Math.sin(3*a-wobble*.7));
+    pts.push([r*Math.cos(a),r*Math.sin(a)]);
+  }
+  blobPath.setAttribute('d',smoothPath(pts));
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+function toggle(){
+  isOn=!isOn;
+  target=isOn?ON_CFG:OFF_CFG;
+  blobPath.classList.toggle('on',isOn);
+  hero.classList.toggle('on',isOn);
+  stateWord.textContent=isOn?'ON':'OFF';
+  stateSub.textContent=isOn?'Tap or shake to turn off':'Tap or shake to turn on';
+  if(isOn){activations++;document.getElementById('statActivations').textContent=activations;}
+}
+hero.addEventListener('click',toggle);
+document.getElementById('shakeBtn').addEventListener('click',()=>{
+  hero.classList.add('shaking');
+  setTimeout(()=>{hero.classList.remove('shaking');toggle();},380);
+});
+
+const home=document.getElementById('home'),settings=document.getElementById('settings');
+document.getElementById('settingsBtn').addEventListener('click',()=>{home.classList.add('hidden');settings.classList.remove('hidden');});
+document.getElementById('backBtn').addEventListener('click',()=>{settings.classList.add('hidden');home.classList.remove('hidden');});
+
+function setSwitch(el){el.addEventListener('click',()=>el.classList.toggle('on'));}
+['detectSwitch','autoOffSwitch','rebootSwitch','bgSwitch','dynSwitch'].forEach(id=>setSwitch(document.getElementById(id)));
+
+function segGroup(id,onPick){
+  const el=document.getElementById(id);
+  el.querySelectorAll('.seg-btn').forEach(btn=>btn.addEventListener('click',()=>{
+    el.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    onPick(btn.dataset.val);
+  }));
+}
+segGroup('gestureSeg',()=>{});
+segGroup('themeSeg',setTheme);
+
+function setTheme(val){
+  if(val==='light')html.setAttribute('data-theme','light');
+  else if(val==='dark')html.setAttribute('data-theme','dark');
+  else html.removeAttribute('data-theme');
+  document.getElementById('themeSeg').querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('active',b.dataset.val===val));
+}
+document.getElementById('themeBtn').addEventListener('click',()=>{
+  const cur=html.getAttribute('data-theme')==='dark'?'dark':'light';
+  setTheme(cur==='dark'?'light':'dark');
+});
+
+const sens=document.getElementById('sensSlider'),sensLabel=document.getElementById('sensLabel');
+const sensNames=['Very low','Low','Medium','High','Very high'];
+sens.addEventListener('input',()=>{sensLabel.textContent=sensNames[sens.value-1];});
+
+document.getElementById('shizukuBtn').addEventListener('click',(e)=>{e.target.textContent='Connected';e.target.disabled=true;});
+</script>
+</body>
+</html>
