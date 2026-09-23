@@ -390,8 +390,12 @@ class BlobMathTest {
             val angle = i.toDouble() / steps * PI * 2
             BlobMath.radiusAt(config, wobble = 0f, angle = angle.toFloat()).toDouble()
         }
+        // `>=` on the left and `>` on the right: at a peak the two samples
+        // straddling it can round to the same float, and strict comparisons on
+        // both sides would then miss the lobe entirely. This counts a plateau
+        // once, at the sample where it starts falling.
         return (0 until steps).count { i ->
-            radii[i] > radii[wrap(i - 1, steps)] && radii[i] > radii[wrap(i + 1, steps)]
+            radii[i] >= radii[wrap(i - 1, steps)] && radii[i] > radii[wrap(i + 1, steps)]
         }
     }
 }
