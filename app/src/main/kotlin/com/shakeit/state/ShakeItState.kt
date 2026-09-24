@@ -13,6 +13,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 
+/** Theme choices exposed by the appearance selector. */
+enum class ThemeMode(val label: String) {
+    Light("Light"),
+    Dark("Dark"),
+    System("System"),
+}
+
 /** The supported gesture modes. */
 enum class ShakeGesture(val label: String) {
     Shake("Shake"),

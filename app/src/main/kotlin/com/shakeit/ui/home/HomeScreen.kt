@@ -107,6 +107,7 @@ fun HomeScreen(
 
             HomeHero(
                 torchOn = torchOn,
+                gesture = gesture,
                 detectedShake = detectedShake,
                 animateBlob = animateBlob,
                 onToggleTorch = onToggleTorch,
@@ -186,6 +187,7 @@ private fun HomeTopBar(
 @Composable
 private fun HomeHero(
     torchOn: Boolean,
+    gesture: ShakeGesture,
     detectedShake: Int,
     animateBlob: Boolean,
     onToggleTorch: () -> Unit,
