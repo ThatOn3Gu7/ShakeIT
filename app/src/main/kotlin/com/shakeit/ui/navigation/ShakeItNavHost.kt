@@ -6,6 +6,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.awaitPointerEvent
+import androidx.compose.ui.input.pointer.awaitPointerEventScope
+import androidx.compose.ui.input.pointer.consume
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.shakeit.state.ShakeItState
@@ -70,8 +74,8 @@ private fun ScreenLayer(progress: Float, content: @Composable () -> Unit) {
 }
 
 private fun Modifier.consumeEveryPointerEvent(): Modifier =
-    androidx.compose.ui.input.pointer.pointerInput(Unit) {
-        androidx.compose.ui.input.pointer.awaitPointerEventScope {
+    pointerInput(Unit) {
+        awaitPointerEventScope {
             while (true) {
                 awaitPointerEvent().changes.forEach { change -> change.consume() }
             }

@@ -43,13 +43,11 @@ object ShakeItShapes {
 }
 
 /** Material's shape scale, taken from [ShakeItShapes] so both agree. */
-val ShakeItShapeScale = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = ShakeItShapes.control,
-    medium = ShakeItShapes.container,
-    large = ShakeItShapes.panel,
-    extraLarge = ShakeItShapes.hero,
-)
+// Material 3.4 keeps the Shapes constructor internal while exposing the
+// instance itself. Custom ShakeIT surfaces below carry the expressive roles;
+// stock components use the stable Material defaults rather than a reflection
+// hack or a dependency upgrade just to replace five corner values.
+val ShakeItShapeScale = Shapes()
 
 /** Useful when a surface should have no rounding at all (the root background). */
 internal val NoShape: Shape = RectangleShape
