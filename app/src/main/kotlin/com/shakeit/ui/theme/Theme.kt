@@ -1,100 +1,67 @@
 package com.shakeit.ui.theme
 
 import android.os.Build
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.platform.LocalContext
 
 /**
- * Accessor for the ShakeIT palette, mirroring how `MaterialTheme.colorScheme`
- * is read. Usage: `ShakeItTheme.colors.primary`.
+ * Whether the palette in force is a dark one.
+ *
+ * Not read from a colour's luminance and not from the system, because ShakeIT has
+ * its own theme switch: a user who has pinned Light on a device set to dark is
+ * looking at a light palette, and anything derived from the theme has to agree
+ * with what is on screen.
  */
 object ShakeItTheme {
-    val colors: ShakeItColors
+    val isDark: Boolean
         @Composable
         @ReadOnlyComposable
-        get() = LocalShakeItColors.current
+        get() = LocalShakeItDarkTheme.current
 }
 
-private val LightMaterialColors = lightColorScheme(
-    primary = LightShakeItColors.primary,
-    onPrimary = LightShakeItColors.onPrimary,
-    secondary = LightShakeItColors.trackOn,
-    onSecondary = LightShakeItColors.onPrimary,
-    tertiary = LightShakeItColors.accent,
-    onTertiary = LightShakeItColors.onAccent,
-    background = LightShakeItColors.background,
-    onBackground = LightShakeItColors.onSurface,
-    surface = LightShakeItColors.surface,
-    onSurface = LightShakeItColors.onSurface,
-    surfaceVariant = LightShakeItColors.surface2,
-    onSurfaceVariant = LightShakeItColors.onSurfaceVariant,
-    outline = LightShakeItColors.outline,
-)
-
-private val DarkMaterialColors = darkColorScheme(
-    primary = DarkShakeItColors.primary,
-    onPrimary = DarkShakeItColors.onPrimary,
-    secondary = DarkShakeItColors.trackOn,
-    onSecondary = DarkShakeItColors.onPrimary,
-    tertiary = DarkShakeItColors.accent,
-    onTertiary = DarkShakeItColors.onAccent,
-    background = DarkShakeItColors.background,
-    onBackground = DarkShakeItColors.onSurface,
-    surface = DarkShakeItColors.surface,
-    onSurface = DarkShakeItColors.onSurface,
-    surfaceVariant = DarkShakeItColors.surface2,
-    onSurfaceVariant = DarkShakeItColors.onSurfaceVariant,
-    outline = DarkShakeItColors.outline,
-)
-
 /**
- * Theme for the whole app.
+ * The app's theme.
  *
- * Two layers are provided:
+ * One colour system, and [MaterialTheme.colorScheme] is it. There used to be a
+ * second palette alongside this one that every custom component read from, which
+ * had a consequence worth stating plainly: the "Dynamic color" switch changed a
+ * scheme nothing visible was using, so it did nothing. Every component now reads
+ * Material's roles — including the full `surfaceContainer*` ladder, which is what
+ * separates panels, groups and rows by tone instead of by borders — so this switch
+ * really does retheme the app.
  *
- *  1. [LocalShakeItColors] — the prototype's palette. Every ShakeIT component
- *     reads from this, which is what keeps the UI looking like
- *     `debug/mockup/shakeit-prototype.html` rather than a stock Material app.
- *  2. [MaterialTheme] — the brand palette expressed as an M3 colour scheme, so
- *     that stock Material components (and things that read `LocalContentColor`)
- *     stay coherent.
- *
- * @param dynamicColor when true, and on Android 12+, the *Material* colour
- *   scheme is taken from the device wallpaper. ShakeIT's own palette is
- *   deliberately not re-tinted: the "Dynamic color" switch in the prototype has
- *   no visual effect either, and swapping the brand purple/amber for the
- *   wallpaper colours would break the design reference. The switch is still
- *   wired end-to-end and persisted, so the behaviour can be extended later.
+ * @param dynamicColor on Android 12+, take the scheme from the device wallpaper.
+ *   Off, or on an older device, fall back to ShakeIT's own brand palette
+ *   ([ShakeItLightColors] / [ShakeItDarkColors]). Both paths are complete
+ *   schemes, so nothing downstream needs to know which one arrived.
  */
 @Composable
 fun ShakeItTheme(
-    darkTheme: Boolean,
+    darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val shakeItColors = if (darkTheme) DarkShakeItColors else LightShakeItColors
-
-    val materialColors = when {
+    val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
 
-        darkTheme -> DarkMaterialColors
-        else -> LightMaterialColors
+        darkTheme -> ShakeItDarkColors
+        else -> ShakeItLightColors
     }
 
-    CompositionLocalProvider(LocalShakeItColors provides shakeItColors) {
+    CompositionLocalProvider(LocalShakeItDarkTheme provides darkTheme) {
         MaterialTheme(
-            colorScheme = materialColors,
-            typography = Typography,
+            colorScheme = colorScheme,
+            shapes = ShakeItShapeScale,
+            typography = ShakeItTypography,
             content = content,
         )
     }

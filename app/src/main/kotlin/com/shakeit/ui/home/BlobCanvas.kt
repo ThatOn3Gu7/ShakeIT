@@ -26,14 +26,38 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 
-/** `.hero-blob { width: 190px; height: 190px }` */
-internal val BlobSize = 190.dp
+/**
+ * How much of the canvas the blob itself occupies.
+ *
+ * The rest is headroom for the halo and the pool of light, both of which are
+ * painted *outside* the blob's outline. Drawing them in the same canvas costs
+ * nothing extra, and it is what stops the glow being clipped at the edge of the
+ * box — the artefact that made the old fixed-size hero look like a sticker on a
+ * card rather than a light in a room.
+ */
+internal const val BlobCanvasFill = 0.62f
+
+/**
+ * The canvas size needed for a blob of a given visible diameter.
+ *
+ * The caller thinks in terms of the blob — "the hero's light should be about
+ * 220dp across on this window" — and the canvas is that plus its headroom.
+ */
+internal fun blobCanvasSize(blobDiameter: Dp): Dp = blobDiameter / BlobCanvasFill
 
 /** `drop-shadow(0 0 22px rgba(var(--glow), .55))` */
 private const val GLOW_BLUR_UNITS = 22f
 private const val GLOW_ALPHA = 0.55f
+
+/**
+ * The pool of light behind the blob, at its strongest just outside the outline.
+ * Kept deliberately faint: it is the reason the hero reads as a lamp rather than
+ * a shape, and any stronger and it becomes a gradient for its own sake.
+ */
+private const val WASH_INNER_ALPHA = 0.30f
+private const val WASH_OUTER_ALPHA = 0.10f
 
 /**
  * Live blob parameters.
@@ -59,7 +83,8 @@ internal class BlobShape {
  * @param animate false freezes the loop at its current phase. Home passes this
  *   so the blob stops burning frames while Settings covers it and resumes
  *   exactly where it left off — the prototype keeps a single
- *   `requestAnimationFrame` loop alive for the whole page lifetime.
+ *   `requestAnimationFrame` loop alive for the whole page lifetime, and so does
+ *   this, for the same reason.
  */
 @Composable
 internal fun rememberBlobShape(on: Boolean, animate: Boolean): BlobShape {
@@ -86,8 +111,16 @@ internal fun rememberBlobShape(on: Boolean, animate: Boolean): BlobShape {
 }
 
 /**
- * Paints the blob: glow first, then the fill on top so only the outer half of
- * the halo shows — the same compositing a CSS `drop-shadow` produces.
+ * Paints the blob: the pool of light first, then the halo, then the fill on top
+ * so only the outer half of each shows through — the same compositing a CSS
+ * `drop-shadow` produces, plus the wash a real lamp would cast.
+ *
+ * @param restingColor the fill while the torch is off
+ * @param litColor the fill while it is on
+ * @param glowColor the halo colour, applied with alpha
+ * @param washColor the light pool, applied with alpha. Pass [Color.Transparent]
+ *   to draw no pool at all — which is what the previews do, since a static
+ *   preview of a half-lit blob with a halo is enough to judge the shape by.
  */
 @Composable
 internal fun BlobCanvas(
@@ -95,6 +128,7 @@ internal fun BlobCanvas(
     restingColor: Color,
     litColor: Color,
     glowColor: Color,
+    washColor: Color,
     modifier: Modifier = Modifier,
 ) {
     // Reused across frames: a draw block running at 60fps must not allocate a
@@ -105,9 +139,10 @@ internal fun BlobCanvas(
     val glow = remember { GlowPaint() }
 
     Canvas(modifier) {
-        buildBlobPath(path, samples, segments, shape, size)
         val mix = shape.onMix
-        drawBlobGlow(glow, path, glowColor, mix, size.minDimension / 200f)
+        drawLightWash(washColor, mix)
+        buildBlobPath(path, samples, segments, shape, size)
+        drawBlobGlow(glow, path, glowColor, mix, size.minDimension * BlobCanvasFill / 200f)
         drawPath(path, lerp(restingColor, litColor, mix))
     }
 }
@@ -120,6 +155,31 @@ private class GlowPaint {
     }
     var blurRadiusPx = -1f
     var blurFilter: BlurMaskFilter? = null
+}
+
+/**
+ * The soft pool of light the hero sits in while the torch is on.
+ *
+ * One radial gradient, no blur, and it is skipped entirely once [onMix] settles
+ * at zero — an off flashlight casts nothing, and drawing a transparent circle
+ * every frame to prove it would be waste.
+ */
+private fun DrawScope.drawLightWash(colour: Color, onMix: Float) {
+    if (onMix <= 0.001f || colour == Color.Transparent) return
+
+    val centre = Offset(size.width / 2f, size.height / 2f)
+    val radius = size.minDimension / 2f
+    drawCircle(
+        brush = Brush.radialGradient(
+            0.42f to colour.copy(alpha = WASH_INNER_ALPHA * onMix),
+            0.74f to colour.copy(alpha = WASH_OUTER_ALPHA * onMix),
+            1f to colour.copy(alpha = 0f),
+            center = centre,
+            radius = radius,
+        ),
+        radius = radius,
+        center = centre,
+    )
 }
 
 private fun DrawScope.drawBlobGlow(
@@ -167,7 +227,9 @@ private fun DrawScope.drawBlobGlow(
 
 /**
  * Fills [path] with the blob outline for the current [shape], working in the
- * SVG's `viewBox="-100 -100 200 200"` space where 1 unit == canvas / 200.
+ * SVG's `viewBox="-100 -100 200 200"` space where 1 unit == blob / 200 — with
+ * the blob occupying [BlobCanvasFill] of the canvas, so the halo has somewhere
+ * to go.
  */
 private fun buildBlobPath(
     path: Path,
@@ -176,7 +238,7 @@ private fun buildBlobPath(
     shape: BlobShape,
     canvas: Size,
 ) {
-    val unit = canvas.minDimension / 200f
+    val unit = canvas.minDimension * BlobCanvasFill / 200f
     BlobMath.sample(
         config = shape.config,
         wobble = shape.wobble,

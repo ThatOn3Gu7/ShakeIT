@@ -1,9 +1,6 @@
 package com.shakeit.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -13,7 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.material3.MaterialTheme
 import com.shakeit.engine.ShakeItEngine
 import com.shakeit.engine.rememberShakeItEngine
 import com.shakeit.state.ShakeItState
@@ -22,14 +19,8 @@ import com.shakeit.state.rememberShakeItState
 import com.shakeit.ui.home.HomeScreen
 import com.shakeit.ui.navigation.ShakeItNavHost
 import com.shakeit.ui.settings.SettingsScreen
-import com.shakeit.ui.theme.DarkShakeItColors
-import com.shakeit.ui.theme.LightShakeItColors
 import com.shakeit.ui.theme.ShakeItTheme
 import kotlinx.coroutines.launch
-
-/** `.screen-clip { transition: background .35s }` */
-private const val BACKGROUND_TRANSITION_MS = 350
-private val BackgroundEasing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
 
 /**
  * Root of the app: resolves the theme, owns the state, mirrors the hardware into
@@ -90,23 +81,11 @@ fun ShakeItApp(
 
     // The background is the only colour the prototype transitions on a theme
     // change; everything else in the palette swaps immediately.
-    val backgroundMix by animateFloatAsState(
-        targetValue = if (isDark) 1f else 0f,
-        animationSpec = tween(BACKGROUND_TRANSITION_MS, easing = BackgroundEasing),
-        label = "backgroundMix",
-    )
-
     ShakeItTheme(darkTheme = isDark, dynamicColor = state.dynamicColor) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(
-                    lerp(
-                        LightShakeItColors.background,
-                        DarkShakeItColors.background,
-                        backgroundMix,
-                    ),
-                ),
+                .background(MaterialTheme.colorScheme.background),
         ) {
             ShakeItNavHost(
                 screen = state.screen,
@@ -115,11 +94,9 @@ fun ShakeItApp(
                         torchOn = state.torchOn,
                         activations = state.activations,
                         detectionStatus = detectionStatus,
-                        shakeRequest = state.shakeRequest,
                         detectedShake = state.detectedShake,
                         animateBlob = state.screen == ShakeItState.Screen.HOME,
                         onToggleTorch = engine::toggleTorch,
-                        onSimulateShake = state::simulateShake,
                         onOpenSettings = state::openSettings,
                         onToggleTheme = { state.toggleTheme(isDarkNow = isDark) },
                     )
