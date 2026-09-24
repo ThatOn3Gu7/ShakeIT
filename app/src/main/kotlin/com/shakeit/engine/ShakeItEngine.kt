@@ -1,14 +1,20 @@
 package com.shakeit.engine
 
+import android.app.ActivityManager
+import android.app.Application
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.os.Build
+import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.shakeit.ShakeItApplication
 import com.shakeit.background.PowerDiagnostics
 import com.shakeit.background.PowerDiagnosticsSnapshot
@@ -25,6 +31,7 @@ import com.shakeit.hardware.ShakeDetector
 import com.shakeit.hardware.TorchController
 import com.shakeit.hardware.detectionStatus
 import com.shakeit.hardware.recoveryDelayMillis
+import com.shakeit.service.SensorProcessContract
 import com.shakeit.service.ShakeItService
 import com.shakeit.state.DefaultShakeItSnapshot
 import com.shakeit.state.DoubleShakeGate
@@ -43,14 +50,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * The one place hardware and platform state are touched, owned by the process
- * rather than by an [android.app.Activity] or a [android.app.Service].
- *
- * Both the UI and the foreground service reach the same instance through
- * [ShakeItApplication], which is what makes the screen and the background agree:
- * a shake with the screen off flips [torchOn], and the composition that is still
- * alive observes it and redraws; a tap in the UI drives the very same controller
- * the service would.
+ * The hardware and platform owner for one process rather than an Activity. In the
+ * `:sensor` process this engine owns the foreground service, detector, torch and
+ * recovery lifecycle. The UI-process engine is a presentation-side observer and
+ * sends explicit commands to the sensor process; it does not register sensors.
  *
  * Nothing here depends on the activity or on composition. Detection runs from a
  * sensor thread into [toggleTorch]; the recovery watchdog runs on its own
@@ -83,6 +86,7 @@ class ShakeItEngine(private val context: Context) {
     private val exits = ProcessExitDiagnostics(context)
     private val haptics = Haptics(context)
     private val store = ShakeItStore(context)
+    private val isSensorProcess = currentProcessName(context).endsWith(":sensor")
 
     /**
      * Read on first use rather than at construction: it is a binder call, and the
@@ -163,6 +167,22 @@ class ShakeItEngine(private val context: Context) {
     private val preferenceListener =
         SharedPreferences.OnSharedPreferenceChangeListener { _, key -> onPreferenceChanged(key) }
 
+    private val sensorStatusReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != SensorProcessContract.ACTION_STATUS) return
+            intent.getStringExtra(SensorProcessContract.EXTRA_STATUS)
+                ?.let { name ->
+                    DetectionStatus.values().firstOrNull { it.name == name }
+                        ?.let { _detectionStatus.value = it }
+                }
+            _serviceRunning.value = intent.getBooleanExtra(
+                SensorProcessContract.EXTRA_SERVICE_RUNNING,
+                false,
+            )
+            publishDiagnostics()
+        }
+    }
+
     /** The persisted preferences, read on demand. In-memory after the first load. */
     private val preferences: ShakeItSnapshot
         get() = store.read(DefaultShakeItSnapshot)
@@ -177,6 +197,14 @@ class ShakeItEngine(private val context: Context) {
      */
     fun start() {
         torch.start()
+        if (!isSensorProcess) {
+            ContextCompat.registerReceiver(
+                context,
+                sensorStatusReceiver,
+                IntentFilter(SensorProcessContract.ACTION_STATUS),
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+        }
         shizuku.start()
         store.addChangeListener(preferenceListener)
         scope.launch {
@@ -285,6 +313,33 @@ class ShakeItEngine(private val context: Context) {
         }
     }
 
+    /** The service process uses this when the UI has no local detector. */
+    fun currentSensitivity(): Int = preferences.sensitivity
+
+    /**
+     * Applies UI preference changes in the dedicated sensor process. Shared
+     * preferences are intentionally not treated as a cross-process event bus;
+     * this explicit command keeps the active detector authoritative.
+     */
+    fun onSensorProcessPreferencesChanged(
+        sensitivity: Int,
+        gestureName: String?,
+        detectionActive: Boolean,
+    ) {
+        detector?.setSensitivity(sensitivity)
+        gestureName?.let { name ->
+            com.shakeit.state.ShakeGesture.values()
+                .firstOrNull { it.name == name }
+                ?.let { detector?.setGesture(it) }
+        }
+        if (detectionActive) {
+            if (detector?.isRunning != true) startDetection()
+        } else {
+            stopDetection()
+        }
+        publishStatus()
+    }
+
     /** The service reports itself foreground. */
     fun onServiceStarted() {
         _serviceRunning.value = true
@@ -370,6 +425,7 @@ class ShakeItEngine(private val context: Context) {
     }
 
     private fun onPreferenceChanged(key: String?) {
+        if (!isSensorProcess) sendSensorProcessPreferences()
         when (key) {
             ShakeItStore.KEY_SENSITIVITY -> {
                 val sensitivity = preferences.sensitivity
@@ -392,6 +448,17 @@ class ShakeItEngine(private val context: Context) {
             else -> return
         }
         publishDiagnostics()
+    }
+
+    private fun sendSensorProcessPreferences() {
+        val prefs = preferences
+        context.sendBroadcast(
+            Intent(SensorProcessContract.ACTION_COMMAND)
+                .setPackage(context.packageName)
+                .putExtra(SensorProcessContract.EXTRA_SENSITIVITY, prefs.sensitivity)
+                .putExtra(SensorProcessContract.EXTRA_GESTURE, prefs.gesture.name)
+                .putExtra(SensorProcessContract.EXTRA_DETECTION_ACTIVE, prefs.detectionActive),
+        )
     }
 
     /**
@@ -607,6 +674,17 @@ class ShakeItEngine(private val context: Context) {
         val status = classify(detector)
         val previous = _detectionStatus.value
         _detectionStatus.value = status
+        if (isSensorProcess) {
+            context.sendBroadcast(
+                Intent(SensorProcessContract.ACTION_STATUS)
+                    .setPackage(context.packageName)
+                    .putExtra(SensorProcessContract.EXTRA_STATUS, status.name)
+                    .putExtra(
+                        SensorProcessContract.EXTRA_SERVICE_RUNNING,
+                        _serviceRunning.value,
+                    ),
+            )
+        }
         if (previous != status) {
             // The single most useful line for diagnosing a device that stops
             // detecting: what changed, how stale the samples had gone, and how
@@ -788,6 +866,17 @@ class ShakeItEngine(private val context: Context) {
     }
 
     private companion object {
+        fun currentProcessName(context: Context): String {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                return Application.getProcessName()
+            }
+            val activityManager = context.getSystemService(ActivityManager::class.java)
+            return activityManager?.runningAppProcesses
+                ?.firstOrNull { it.pid == Process.myPid() }
+                ?.processName
+                ?: context.packageName
+        }
+
         const val TAG = "ShakeItEngine"
 
         /** How often the watchdog checks that samples are still arriving. */

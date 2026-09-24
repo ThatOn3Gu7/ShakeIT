@@ -2,11 +2,14 @@ package com.shakeit.service
 
 import android.app.NotificationManager
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.shakeit.ShakeItApplication
 import com.shakeit.engine.ShakeItEngine
@@ -45,9 +48,32 @@ class ShakeItService : Service() {
     private lateinit var engine: ShakeItEngine
     private var stateJob: Job? = null
 
+    private val commandReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != SensorProcessContract.ACTION_COMMAND) return
+            engine.onSensorProcessPreferencesChanged(
+                sensitivity = intent.getIntExtra(
+                    SensorProcessContract.EXTRA_SENSITIVITY,
+                    engine.currentSensitivity(),
+                ),
+                gestureName = intent.getStringExtra(SensorProcessContract.EXTRA_GESTURE),
+                detectionActive = intent.getBooleanExtra(
+                    SensorProcessContract.EXTRA_DETECTION_ACTIVE,
+                    true,
+                ),
+            )
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         engine = (application as ShakeItApplication).engine
+        ContextCompat.registerReceiver(
+            this,
+            commandReceiver,
+            IntentFilter(SensorProcessContract.ACTION_COMMAND),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         ShakeItNotification.createChannel(this)
         // Detection is armed from onStartCommand, which always follows onCreate
         // for a started service — one place, so it cannot drift.
@@ -91,6 +117,7 @@ class ShakeItService : Service() {
     }
 
     override fun onDestroy() {
+        unregisterReceiver(commandReceiver)
         scope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         if (::engine.isInitialized) {
