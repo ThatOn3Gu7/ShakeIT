@@ -125,7 +125,8 @@ fun SettingsScreen(
     onRepairBackgroundAppOp: () -> Unit = {},
 ) {
     var diagnosticsOpen by remember { mutableStateOf(false) }
-    val haptics = remember { Haptics(LocalContext.current) }
+    val context = LocalContext.current
+    val haptics = remember(context) { Haptics(context) }
     val onSensitivityChange: (Int) -> Unit = { next ->
         if (next != state.sensitivity) haptics.tick()
         state.setSensitivity(next)
