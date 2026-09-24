@@ -3,6 +3,7 @@ package com.shakeit.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -12,8 +13,6 @@ import com.shakeit.state.DefaultShakeItSnapshot
 import com.shakeit.state.ShakeItState
 import com.shakeit.ui.home.HomeScreen
 import com.shakeit.ui.settings.SettingsScreen
-import com.shakeit.ui.theme.DarkShakeItColors
-import com.shakeit.ui.theme.LightShakeItColors
 import com.shakeit.ui.theme.ShakeItTheme
 
 /**
@@ -32,9 +31,7 @@ private fun PreviewShell(darkTheme: Boolean, content: @Composable () -> Unit) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(
-                    if (darkTheme) DarkShakeItColors.background else LightShakeItColors.background,
-                ),
+                .background(MaterialTheme.colorScheme.background),
             content = { content() },
         )
     }
@@ -94,13 +91,11 @@ private fun HomeScreenPreview(torchOn: Boolean) {
         torchOn = torchOn,
         activations = DefaultShakeItSnapshot.activations,
         detectionStatus = DetectionStatus.ACTIVE,
-        shakeRequest = 0,
         detectedShake = 0,
         // Frozen in previews: the frame loop would otherwise keep the preview
         // redrawing indefinitely.
         animateBlob = false,
         onToggleTorch = {},
-        onSimulateShake = {},
         onOpenSettings = {},
         onToggleTheme = {},
     )

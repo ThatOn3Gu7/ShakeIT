@@ -6,7 +6,21 @@
     <string name="cd_toggle_theme">Toggle theme</string>
     <string name="cd_open_settings">Settings</string>
     <string name="cd_back">Back</string>
-    <string name="cd_toggle_torch">Toggle torch</string>
+    <string name="cd_toggle_torch">Toggle flashlight</string>
+    <string name="cd_manual_toggle_hint">Tap the light to toggle manually</string>
+    <string name="cd_expand_diagnostics">Show diagnostics</string>
+    <string name="cd_collapse_diagnostics">Hide diagnostics</string>
+    <string name="home_greeting">READY FOR MOTION</string>
+    <string name="home_flashlight_active">Flashlight active</string>
+    <string name="home_flashlight_off">Flashlight off</string>
+    <string name="home_light_is_on">Shake to turn it off</string>
+    <string name="home_light_is_off">Shake to turn it on</string>
+    <string name="shake_instruction_title">Shake to toggle</string>
+    <string name="shake_instruction_body">Give your phone a quick shake</string>
+    <string name="shake_instruction_accessibility">Shake to toggle. Give your phone a quick shake. This is an instruction, not a button.</string>
+    <string name="home_activity_label">Activity</string>
+    <string name="home_activity_value">%1$d flashlight activations</string>
+    <string name="home_activity_note">Real activity only</string>
     <string name="status_detection_active">Shake detection active</string>
     <string name="status_detection_paused">Shake detection paused</string>
     <string name="state_on">ON</string>
@@ -42,6 +56,22 @@
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
+    <string name="settings_section_everyday">Everyday controls</string>
+    <string name="settings_section_everyday_support">Make the gesture feel like yours.</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_appearance_support">Set the mood without losing clarity.</string>
+    <string name="settings_section_reliability">Reliability and advanced</string>
+    <string name="settings_section_reliability_support">Keep detection available when the screen is away.</string>
+    <string name="settings_section_diagnostics">Diagnostics</string>
+    <string name="settings_section_diagnostics_support">Technical facts, available when you need them.</string>
+    <string name="setting_gesture">Gesture</string>
+    <string name="setting_theme">Theme</string>
+    <string name="settings_detection_active_subtitle">Shake detection is running</string>
+    <string name="settings_detection_paused_subtitle">Shake detection is paused</string>
+    <string name="settings_auto_off_subtitle">Turn the flashlight off after five minutes</string>
+    <string name="settings_run_background_subtitle">Keep the detector available outside the app</string>
+    <string name="settings_reboot_subtitle">Resume detection after the device restarts</string>
+    <string name="settings_dynamic_color_subtitle">Use colors from your device wallpaper</string>
     <string name="group_shake_mechanics">Shake mechanics</string>
     <string name="group_flashlight_reliability">Flashlight &amp; reliability</string>
     <string name="group_appearance">Appearance</string>

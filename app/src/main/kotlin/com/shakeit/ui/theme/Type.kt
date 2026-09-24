@@ -4,174 +4,165 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 
 /**
- * Typography for ShakeIT.
+ * ShakeIT's type scale.
  *
- * The prototype loads two families: **Manrope** (weights 600/800) for the
- * display text — the OFF/ON state word, the Settings title, the stat numbers —
- * and **Roboto** (400/500/700) for everything else.
+ * Every style in the app is one of Material's fifteen roles. The prototype's
+ * per-element `px` sizes (`38px` for the state word, `12.5px` for a row label,
+ * `11px` for a caption) are gone: they were a one-to-one transcription of one
+ * CSS file, they did not scale with each other, and they left the hierarchy
+ * carried almost entirely by font weight.
  *
- * Roboto *is* the Android system font, so `FontFamily.Default` already matches
- * the body text exactly. Manrope is not shipped with Android and there is no
- * font binary in this repository yet, so the display family currently resolves
- * to the system font as well. To finish the swap, drop `manrope_bold.ttf` /
- * `manrope_extrabold.ttf` into `app/src/main/res/font/` and change
- * [DisplayFontFamily] to:
+ * The scale starts from Material's own numbers, with two deliberate deviations
+ * that give ShakeIT its voice:
  *
- * ```
- * val DisplayFontFamily = FontFamily(
- *     Font(R.font.manrope_bold, FontWeight.Bold),
- *     Font(R.font.manrope_extrabold, FontWeight.ExtraBold),
- * )
- * ```
+ *  - **display and headline are ExtraBold with negative tracking.** A large,
+ *    tight, heavy word is the app's identity — it is what says "flashlight is
+ *    ON" from across a room.
+ *  - **label roles are Bold with positive tracking.** They are used for section
+ *    headers and status text, which are short, and short text at small sizes
+ *    reads better with air in it. Section headers uppercase them at the call
+ *    site, which is a text decision rather than a type one.
  *
- * No other code has to change — every display style below reads from it.
+ * All sizes are `sp`, so the whole scale follows the user's font-size setting.
+ * Nothing here hardcodes a pixel value or disables scaling.
+ *
+ * The prototype loaded **Manrope** for its display text. No font binary is
+ * committed and none could be fetched here, so [DisplayFontFamily] currently
+ * resolves to the system font. Dropping the two TTFs into
+ * `app/src/main/res/font/` and pointing [DisplayFontFamily] at them is the whole
+ * change — every display and headline style below reads from it.
  */
 val DisplayFontFamily: FontFamily = FontFamily.Default
 val BodyFontFamily: FontFamily = FontFamily.Default
 
-/**
- * Named text styles, one per distinct type treatment in the prototype.
- * Sizes are the prototype's `px` values read as `sp`.
- */
-object ShakeItType {
+val ShakeItTypography = Typography(
 
-    /** `.state-word` — Manrope 800, 38px, letter-spacing .5px */
-    val stateWord = TextStyle(
+    /* ------------------------------------------------------- hero state */
+
+    /** The hero's state word at its largest: "Flashlight Active". */
+    displayLarge = TextStyle(
         fontFamily = DisplayFontFamily,
         fontWeight = FontWeight.ExtraBold,
-        fontSize = 38.sp,
-        letterSpacing = 0.5.sp,
-        textAlign = TextAlign.Center,
-    )
-
-    /** `#settings h1` — Manrope 800, 20px */
-    val settingsTitle = TextStyle(
+        fontSize = 52.sp,
+        lineHeight = 58.sp,
+        letterSpacing = (-1.5).sp,
+    ),
+    displayMedium = TextStyle(
         fontFamily = DisplayFontFamily,
         fontWeight = FontWeight.ExtraBold,
-        fontSize = 20.sp,
-        textAlign = TextAlign.Center,
-    )
+        fontSize = 42.sp,
+        lineHeight = 48.sp,
+        letterSpacing = (-1.25).sp,
+    ),
+    /** The hero's state word on a compact phone. */
+    displaySmall = TextStyle(
+        fontFamily = DisplayFontFamily,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 34.sp,
+        lineHeight = 40.sp,
+        letterSpacing = (-1).sp,
+    ),
 
-    /** `.stat-num` — Manrope 700, 16px */
-    val statNumber = TextStyle(
+    /* ---------------------------------------------------- screen titles */
+
+    headlineLarge = TextStyle(
         fontFamily = DisplayFontFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 16.sp,
-        textAlign = TextAlign.Center,
-    )
+        fontSize = 30.sp,
+        lineHeight = 38.sp,
+        letterSpacing = (-0.75).sp,
+    ),
+    /** The Settings title. */
+    headlineMedium = TextStyle(
+        fontFamily = DisplayFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 26.sp,
+        lineHeight = 32.sp,
+        letterSpacing = (-0.5).sp,
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = DisplayFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+        letterSpacing = (-0.25).sp,
+    ),
 
-    /** `.group h2` — 12.5px, 700, letter-spacing .2px, `--primary` */
-    val groupHeader = TextStyle(
+    /* ------------------------------------------------- titles and stats */
+
+    titleLarge = TextStyle(
         fontFamily = BodyFontFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 12.5.sp,
-        letterSpacing = 0.2.sp,
-    )
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 20.sp,
+        lineHeight = 26.sp,
+    ),
+    /** A settings row's title, and a stat's number. */
+    titleMedium = TextStyle(
+        fontFamily = BodyFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 16.sp,
+        lineHeight = 22.sp,
+        letterSpacing = 0.1.sp,
+    ),
+    titleSmall = TextStyle(
+        fontFamily = BodyFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.1.sp,
+    ),
 
-    /** `.switch-row span` — 14px */
-    val rowLabel = TextStyle(
+    /* --------------------------------------------------------- body copy */
+
+    bodyLarge = TextStyle(
+        fontFamily = BodyFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.15.sp,
+    ),
+    /** Row subtitles and supporting text. */
+    bodyMedium = TextStyle(
         fontFamily = BodyFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
-    )
-
-    /** `.state-sub` — 13.5px */
-    val stateSub = TextStyle(
-        fontFamily = BodyFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 13.5.sp,
-        textAlign = TextAlign.Center,
-    )
-
-    /** `.shake-btn` / `.seg-btn` body — Roboto 500, 13.5px / 12.5px */
-    val buttonLabel = TextStyle(
-        fontFamily = BodyFontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 13.5.sp,
-    )
-
-    /** `.seg-btn` — Roboto 500, 12.5px */
-    val segmentLabel = TextStyle(
-        fontFamily = BodyFontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 12.5.sp,
-        textAlign = TextAlign.Center,
-    )
-
-    /** `.seg-btn.active` — Roboto 700, 12.5px */
-    val segmentLabelActive = segmentLabel.copy(fontWeight = FontWeight.Bold)
-
-    /** `.status-pill` — 12.5px */
-    val statusText = TextStyle(
-        fontFamily = BodyFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.5.sp,
-    )
-
-    /** `.row-text small` — 12px */
-    val caption = TextStyle(
+        lineHeight = 20.sp,
+        letterSpacing = 0.15.sp,
+    ),
+    bodySmall = TextStyle(
         fontFamily = BodyFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
-    )
+        lineHeight = 17.sp,
+        letterSpacing = 0.2.sp,
+    ),
 
-    /** `.row-text-block small` — 12.5px, line-height 1.4 */
-    val captionBlock = TextStyle(
+    /* ----------------------------------------------------------- labels */
+
+    /** Section headers, button labels, chip text. */
+    labelLarge = TextStyle(
         fontFamily = BodyFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.5.sp,
-        lineHeight = 17.5.sp,
-    )
-
-    /** `.stat-label` — 11px */
-    val statLabel = TextStyle(
-        fontFamily = BodyFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 11.sp,
-        textAlign = TextAlign.Center,
-    )
-
-    /** `.fine-print` — 11.5px, line-height 1.5 */
-    val finePrint = TextStyle(
-        fontFamily = BodyFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 11.5.sp,
-        lineHeight = 17.25.sp,
-    )
-
-    /** `.outline-btn` — Roboto 600, 13.5px */
-    val outlineButton = TextStyle(
+        fontWeight = FontWeight.Bold,
+        fontSize = 14.sp,
+        lineHeight = 18.sp,
+        letterSpacing = 0.4.sp,
+    ),
+    labelMedium = TextStyle(
         fontFamily = BodyFontFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 13.5.sp,
-        textAlign = TextAlign.Center,
-    )
-
-    /** Glyphs used by the top bar buttons (◐ ⚙ ←) — 17px in the prototype. */
-    val iconGlyph = TextStyle(
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.6.sp,
+    ),
+    /** The smallest text in the app: diagnostic detail and fine print. */
+    labelSmall = TextStyle(
         fontFamily = BodyFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 17.sp,
-        textAlign = TextAlign.Center,
-    )
-}
-
-/**
- * Material 3 type scale, derived from the ShakeIT styles above so that any stock
- * Material component picks up the same metrics instead of the template defaults.
- */
-val Typography = Typography(
-    displayLarge = ShakeItType.stateWord,
-    headlineSmall = ShakeItType.settingsTitle,
-    titleMedium = ShakeItType.statNumber,
-    labelSmall = ShakeItType.groupHeader,
-    bodyLarge = ShakeItType.rowLabel,
-    bodyMedium = ShakeItType.buttonLabel,
-    bodySmall = ShakeItType.caption,
-    labelLarge = ShakeItType.outlineButton,
-    labelMedium = ShakeItType.segmentLabel,
+        fontWeight = FontWeight.Medium,
+        fontSize = 11.sp,
+        lineHeight = 15.sp,
+        letterSpacing = 0.6.sp,
+    ),
 )
