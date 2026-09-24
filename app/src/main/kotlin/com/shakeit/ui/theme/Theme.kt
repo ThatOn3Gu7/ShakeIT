@@ -60,7 +60,6 @@ fun ShakeItTheme(
     CompositionLocalProvider(LocalShakeItDarkTheme provides darkTheme) {
         MaterialTheme(
             colorScheme = colorScheme,
-            shapes = ShakeItShapeScale,
             typography = ShakeItTypography,
             content = content,
         )

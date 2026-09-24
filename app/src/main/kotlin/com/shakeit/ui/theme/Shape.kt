@@ -1,7 +1,6 @@
 package com.shakeit.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Shapes
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
@@ -42,12 +41,9 @@ object ShakeItShapes {
     val informational: Shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 28.dp, bottomEnd = 10.dp)
 }
 
-/** Material's shape scale, taken from [ShakeItShapes] so both agree. */
-// Material 3.4 keeps the Shapes constructor internal while exposing the
-// instance itself. Custom ShakeIT surfaces below carry the expressive roles;
-// stock components use the stable Material defaults rather than a reflection
-// hack or a dependency upgrade just to replace five corner values.
-val ShakeItShapeScale = Shapes()
-
-/** Useful when a surface should have no rounding at all (the root background). */
-internal val NoShape: Shape = RectangleShape
+/**
+ * Material's stock shape scale remains available through MaterialTheme. ShakeIT's
+ * custom surfaces use the expressive roles above directly; the library's Shapes
+ * constructor is internal in the resolved Material3 release, so we do not
+ * duplicate or reflect it just to replace defaults.
+ */
