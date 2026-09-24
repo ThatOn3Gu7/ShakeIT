@@ -62,7 +62,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.consume
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -315,12 +314,12 @@ private fun SensitivitySteps(
                         // Wait for horizontal intent before consuming. Vertical
                         // movement therefore remains a normal Settings scroll.
                         change.consume()
-                        currentOnValueChange(levelAt(change.position.x, size.width))
+                        currentOnValueChange(levelAt(change.position.x, size.width.toFloat()))
                     }
                     if (horizontal != null) {
                         horizontalDrag(horizontal.id) { change ->
                             change.consume()
-                            currentOnValueChange(levelAt(change.position.x, size.width))
+                            currentOnValueChange(levelAt(change.position.x, size.width.toFloat()))
                         }
                     }
                 }
@@ -332,7 +331,7 @@ private fun SensitivitySteps(
             val selected = level == value
             val height by animateDpAsState(
                 targetValue = if (selected) 28.dp else 18.dp,
-                animationSpec = ShakeItMotion.Snap,
+                animationSpec = ShakeItMotion.SnapDp,
                 label = "sensitivityLevelHeight$level",
             )
             Box(
