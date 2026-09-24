@@ -1,5 +1,6 @@
 package com.shakeit.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.horizontalDrag
@@ -16,7 +17,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.style.TextOverflow
+import com.shakeit.ui.theme.ShakeItMotion
 import kotlin.math.floor
 
 /**
@@ -78,6 +81,21 @@ fun <T> ShakeItSegmentedRow(
             },
     ) {
         options.forEachIndexed { index, option ->
+            val selectedProgress by animateFloatAsState(
+                targetValue = if (option == selected) 1f else 0f,
+                animationSpec = ShakeItMotion.Snap,
+                label = "segmentedSelection$index",
+            )
+            val activeContainer = lerp(
+                MaterialTheme.colorScheme.surfaceContainerHigh,
+                MaterialTheme.colorScheme.primaryContainer,
+                selectedProgress,
+            )
+            val activeContent = lerp(
+                MaterialTheme.colorScheme.onSurfaceVariant,
+                MaterialTheme.colorScheme.onPrimaryContainer,
+                selectedProgress,
+            )
             SegmentedButton(
                 selected = option == selected,
                 onClick = { if (currentEnabled(option)) currentSelection(option) },
@@ -85,10 +103,10 @@ fun <T> ShakeItSegmentedRow(
                 enabled = currentEnabled(option),
                 modifier = Modifier.weight(1f),
                 colors = SegmentedButtonDefaults.colors(
-                    activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    inactiveContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    activeContainerColor = activeContainer,
+                    activeContentColor = activeContent,
+                    inactiveContainerColor = activeContainer,
+                    inactiveContentColor = activeContent,
                 ),
                 // No checkmark: the current visual language uses the selected
                 // container itself as the indicator, so the rail stays unchanged.
