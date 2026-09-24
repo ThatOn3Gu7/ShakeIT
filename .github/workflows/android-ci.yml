@@ -57,6 +57,13 @@ env:
   # an artifact for the report job to parse.
   GRADLE_LOG: build.log
   GRADLE_ARGS: --console=plain --stacktrace
+  # These are repository secrets containing the shared development certificate.
+  # They are intentionally empty when the repository has not been configured;
+  # that falls back to AGP's ordinary debug key with an explicit warning.
+  SHAKEIT_DEV_KEYSTORE_BASE64: ${{ secrets.SHAKEIT_DEV_KEYSTORE_BASE64 }}
+  SHAKEIT_DEV_STORE_PASSWORD: ${{ secrets.SHAKEIT_DEV_STORE_PASSWORD }}
+  SHAKEIT_DEV_KEY_ALIAS: ${{ secrets.SHAKEIT_DEV_KEY_ALIAS }}
+  SHAKEIT_DEV_KEY_PASSWORD: ${{ secrets.SHAKEIT_DEV_KEY_PASSWORD }}
 
 jobs:
   # The three checks below are independent on purpose: `assemble-debug` must run
