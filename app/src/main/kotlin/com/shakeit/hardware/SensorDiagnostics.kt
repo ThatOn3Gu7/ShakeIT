@@ -36,6 +36,9 @@ package com.shakeit.hardware
  *   successfully; null when there has not been one
  */
 data class SensorDiagnostics(
+    val accelerometerName: String? = null,
+    val accelerometerType: Int = 0,
+    val accelerometerReportingMode: Int = 0,
     val accelerometerAvailable: Boolean = false,
     val accelerometerWakeUp: Boolean = false,
     val proximityAvailable: Boolean = false,
