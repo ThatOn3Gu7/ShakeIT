@@ -27,12 +27,18 @@
     <string name="notification_listening">Listening for shakes — torch off</string>
     <string name="notification_torch_on">Listening for shakes — torch on</string>
     <string name="notification_covered">Paused — phone looks covered</string>
+    <string name="notification_recovering">Detection recovering — rebuilding the sensor listener</string>
     <string name="notification_stalled">Detection stalled — battery settings may be blocking it</string>
-    <string name="notification_inactive">No accelerometer — tap still works, shake does not</string>
+    <string name="notification_no_sensor">No accelerometer — tap still works, shake does not</string>
+    <!-- Detection is off because the switch is off; nothing is broken. -->
+    <string name="notification_inactive">Detection off</string>
     <string name="notification_stop">Stop</string>
+    <string name="notification_diagnostics">Diagnostics</string>
 
     <!-- Home status -->
+    <string name="status_detection_recovering">Recovering — rebuilding sensor</string>
     <string name="status_detection_stalled">Stalled — check battery settings</string>
+    <string name="status_detection_no_sensor">No accelerometer — tap only</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -42,21 +48,30 @@
     <string name="group_advanced">Advanced</string>
     <string name="setting_sensitivity">Sensitivity</string>
     <string name="setting_detection_active">Detection active</string>
+    <string name="gesture_not_implemented">Only “Shake” is recognised today. Double-shake and flip &amp; shake come from the design prototype and are not implemented yet — detection keeps using Shake.</string>
     <string name="setting_auto_off">Auto-off after 5 min</string>
     <string name="setting_start_after_reboot">Start after reboot</string>
     <string name="setting_run_in_background">Run in background</string>
     <string name="setting_background_reliability">Background reliability</string>
-    <string name="background_unrestricted">Unrestricted — detection can run with the screen off</string>
-    <string name="background_restricted">Battery optimisation may stop detection in the background</string>
+    <string name="background_unrestricted">Exempt from Android’s battery optimisation (the Doze allowlist). Vendor restrictions are reported separately below.</string>
+    <string name="background_restricted">On Android’s battery-optimisation list, so Doze can ignore the wake lock and stop detection with the screen off.</string>
     <string name="background_open_settings">Open battery settings</string>
-    <string name="background_vendor_transsion">On XOS also allow auto-start: Settings → Battery &amp; power saving → App management → ShakeIT → allow background activity, then enable ShakeIT under Auto-start / Startup manager.</string>
-    <string name="background_vendor_xiaomi">On MIUI also allow auto-start: Settings → Apps → Permissions → Autostart, and set battery saver to “No restrictions” for ShakeIT.</string>
+    <string name="background_open_app_settings">Open ShakeIT’s system page</string>
+    <string name="background_vendor_transsion">On XOS/HiOS these are separate switches, and ShakeIT can only read the first: Battery &amp; power saving → App management → ShakeIT → Unrestricted / allow background activity; Auto-start or Startup manager → allow ShakeIT; Phone Master → App freezer / background management → do not freeze ShakeIT; then lock ShakeIT’s card in Recents so the cleaner skips it.</string>
+    <string name="background_vendor_xiaomi">On MIUI/HyperOS these are separate switches, and ShakeIT can only read the first: Settings → Battery → battery saver → No restrictions for ShakeIT; Apps → Permissions → Autostart → allow ShakeIT; Security → Boost speed / clear background → do not clean ShakeIT; then lock ShakeIT’s card in Recents.</string>
     <string name="background_vendor_stock">If detection stops after a few minutes, set ShakeIT’s battery usage to Unrestricted and disable any per-app background limit.</string>
     <string name="setting_dynamic_color">Dynamic color</string>
     <string name="setting_shizuku">Shizuku</string>
-    <string name="shizuku_disconnected">Not connected — can improve background reliability beyond standard Android limits.</string>
-    <string name="shizuku_connected">Connected — background reliability improved beyond standard Android limits.</string>
-    <string name="shizuku_connect">Connect Shizuku</string>
-    <string name="shizuku_connect_done">Connected</string>
+    <string name="setting_diagnostics">Diagnostics</string>
+    <string name="shizuku_not_installed">Not installed — optional. Shizuku lets ShakeIT read and repair its own background restrictions; nothing needs it.</string>
+    <string name="shizuku_not_running">Installed, but its service is not running. Start it from the Shizuku app, then come back.</string>
+    <string name="shizuku_permission_needed">Running. ShakeIT has not been granted access yet, so no repairs are offered.</string>
+    <string name="shizuku_denied">Access was denied. It can only be granted again from inside the Shizuku app.</string>
+    <string name="shizuku_ready">Connected — ShakeIT can inspect and repair its own background restrictions.</string>
+    <string name="shizuku_grant">Grant access</string>
+    <string name="shizuku_open">Open Shizuku</string>
+    <string name="shizuku_repair_doze">Add to battery allowlist</string>
+    <string name="shizuku_repair_appop">Allow background activity</string>
+    <string name="shizuku_not_root">Shizuku runs commands as shell or root, as the user set it up — it does not make ShakeIT a system app, and every change below is limited to ShakeIT’s own package.</string>
     <string name="advanced_fine_print">Some background behavior is limited by your device manufacturer, not by ShakeIT.</string>
 </resources>

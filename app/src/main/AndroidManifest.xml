@@ -22,6 +22,21 @@
       stays up while samples silently stop arriving.
     -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!--
+      Only used by BootReceiver, which is itself gated on the "Start after
+      reboot" switch in Settings. Nothing else in the app reacts to boot.
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      Package visibility (Android 11+): ShakeIT needs to be able to see whether
+      Shizuku is installed, and to launch it, before it can offer the privileged
+      repairs in Settings. Without this, getPackageInfo() throws NameNotFound on
+      a device that has Shizuku installed and the answer reads "not installed".
+    -->
+    <queries>
+        <package android:name="moe.shizuku.privileged.api" />
+    </queries>
 
     <!--
       Every one of these degrades instead of failing: no flash means the tap
@@ -79,6 +94,36 @@
         <receiver
             android:name=".service.StopDetectionReceiver"
             android:exported="false" />
+
+        <!--
+          Restarts detection after a reboot or an app update, when the user asked
+          for it. BOOT_COMPLETED is one of the few broadcasts from which starting
+          a foreground service is still allowed with no visible UI. Both actions
+          are protected system broadcasts, so exported="true" here cannot be
+          triggered by another app.
+        -->
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          Shizuku's binder hand-off. Shizuku delivers its IBinder to this
+          provider, which is how the app learns Shizuku is running without
+          polling; the declared permission keeps every other app out.
+          Documented form from the Shizuku-API README.
+        -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
 
 </manifest>

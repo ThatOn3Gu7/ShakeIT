@@ -17,11 +17,12 @@ import com.shakeit.hardware.DetectionStatus
  * The foreground notification for [ShakeItService].
  *
  * It doubles as the only visible sign that shake detection is armed, so its text
- * reports what the detector is doing right now — listening, torch on, paused
- * because the phone looks covered, or *stalled*, meaning the service is alive but
- * no samples are arriving. That last one matters: a foreground service whose
- * notification claims to be listening while its sensor has been starved is worse
- * than no notification at all, because it hides the actual problem.
+ * reports what the detector is doing right now: listening, torch on, paused
+ * because the phone looks covered, recovering after a stall, stalled, or
+ * impossible on this device. The broken states matter most — a foreground service
+ * whose notification claims to be listening while its sensor has been starved is
+ * worse than no notification at all, because it hides the actual problem — so they
+ * also carry an action that opens the diagnostics page.
  *
  * The framework [NotificationManager] is used directly rather than the AndroidX
  * wrapper: posting is a no-op without `POST_NOTIFICATIONS` on Android 13+ either
@@ -34,6 +35,7 @@ internal object ShakeItNotification {
     private const val CHANNEL_ID = "shake_detection"
     private const val REQUEST_CONTENT = 1
     private const val REQUEST_STOP = 2
+    private const val REQUEST_DIAGNOSTICS = 3
 
     /** Creates the low-importance channel the service posts into. Idempotent. */
     fun createChannel(context: Context) {
@@ -67,7 +69,9 @@ internal object ShakeItNotification {
         // A problem outranks a state: "torch on" is not worth reporting if the
         // detector that would turn it off has stopped hearing anything.
         val statusText = when (status) {
+            DetectionStatus.RECOVERING -> context.getString(R.string.notification_recovering)
             DetectionStatus.STALLED -> context.getString(R.string.notification_stalled)
+            DetectionStatus.NO_SENSOR -> context.getString(R.string.notification_no_sensor)
             DetectionStatus.INACTIVE -> context.getString(R.string.notification_inactive)
             DetectionStatus.ACTIVE -> when {
                 covered -> context.getString(R.string.notification_covered)
@@ -81,6 +85,17 @@ internal object ShakeItNotification {
             .setContentTitle(context.getString(R.string.app_name))
             .setContentText(statusText)
             .setContentIntent(contentIntent(context))
+            // Only offered while something is actually wrong, so the usual
+            // notification stays a single, quiet status line.
+            .apply {
+                if (status == DetectionStatus.STALLED || status == DetectionStatus.RECOVERING) {
+                    addAction(
+                        0,
+                        context.getString(R.string.notification_diagnostics),
+                        diagnosticsIntent(context),
+                    )
+                }
+            }
             .addAction(0, context.getString(R.string.notification_stop), stopIntent(context))
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -104,6 +119,15 @@ internal object ShakeItNotification {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
+
+    private fun diagnosticsIntent(context: Context): PendingIntent = PendingIntent.getActivity(
+        context,
+        REQUEST_DIAGNOSTICS,
+        Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(MainActivity.EXTRA_OPEN_SETTINGS, true),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
 
     private fun stopIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
         context,

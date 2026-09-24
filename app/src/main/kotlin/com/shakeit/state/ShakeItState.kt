@@ -1,6 +1,7 @@
 package com.shakeit.state
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,7 +58,6 @@ data class ShakeItSnapshot(
     val runInBackground: Boolean,
     val themeMode: ThemeMode,
     val dynamicColor: Boolean,
-    val shizukuConnected: Boolean,
     val activations: Int,
 )
 
@@ -80,7 +80,6 @@ val DefaultShakeItSnapshot = ShakeItSnapshot(
     runInBackground = true,
     themeMode = ThemeMode.System,
     dynamicColor = true,
-    shizukuConnected = false,
     activations = 7,
 )
 
@@ -104,7 +103,6 @@ class ShakeItStore(context: Context) {
         runInBackground = prefs.getBoolean(KEY_RUN_IN_BACKGROUND, fallback.runInBackground),
         themeMode = readThemeMode(KEY_THEME_MODE, fallback.themeMode),
         dynamicColor = prefs.getBoolean(KEY_DYNAMIC_COLOR, fallback.dynamicColor),
-        shizukuConnected = prefs.getBoolean(KEY_SHIZUKU_CONNECTED, fallback.shizukuConnected),
         activations = prefs.getInt(KEY_ACTIVATIONS, fallback.activations),
     )
 
@@ -118,9 +116,28 @@ class ShakeItStore(context: Context) {
             .putBoolean(KEY_RUN_IN_BACKGROUND, snapshot.runInBackground)
             .putString(KEY_THEME_MODE, snapshot.themeMode.name)
             .putBoolean(KEY_DYNAMIC_COLOR, snapshot.dynamicColor)
-            .putBoolean(KEY_SHIZUKU_CONNECTED, snapshot.shizukuConnected)
             .putInt(KEY_ACTIVATIONS, snapshot.activations)
             .apply()
+    }
+
+    /**
+     * Observes preference changes.
+     *
+     * The engine listens rather than being told: the switches live in the UI, but
+     * what they control — the detector, the service, the boot receiver — lives in
+     * the process. Both read this one file, and `SharedPreferences` hands the same
+     * in-memory instance to every caller in a process, so a write from a
+     * composition reaches the engine without either knowing about the other.
+     *
+     * The listener is held weakly by the platform, so callers must keep a strong
+     * reference to it — which is why the engine stores its own.
+     */
+    fun addChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+    }
+
+    fun removeChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
     }
 
     private fun readGesture(key: String, fallback: ShakeGesture): ShakeGesture {
@@ -133,7 +150,12 @@ class ShakeItStore(context: Context) {
         return ThemeMode.values().firstOrNull { it.name == name } ?: fallback
     }
 
-    private companion object {
+    /**
+     * Key names are not private: the engine reacts to specific preferences, and
+     * spelling them out twice is how a rename silently breaks background
+     * detection.
+     */
+    companion object {
         const val PREFS_NAME = "shakeit_state"
         const val KEY_SENSITIVITY = "sensitivity"
         const val KEY_GESTURE = "gesture"
@@ -143,7 +165,6 @@ class ShakeItStore(context: Context) {
         const val KEY_RUN_IN_BACKGROUND = "run_in_background"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_DYNAMIC_COLOR = "dynamic_color"
-        const val KEY_SHIZUKU_CONNECTED = "shizuku_connected"
         const val KEY_ACTIVATIONS = "activations"
     }
 }
@@ -210,7 +231,6 @@ class ShakeItState(initial: ShakeItSnapshot) {
     var runInBackground by mutableStateOf(initial.runInBackground)
     var themeMode by mutableStateOf(initial.themeMode)
     var dynamicColor by mutableStateOf(initial.dynamicColor)
-    var shizukuConnected by mutableStateOf(initial.shizukuConnected)
 
     val sensitivityLabel: String
         get() = Sensitivity.label(sensitivity)
@@ -263,11 +283,6 @@ class ShakeItState(initial: ShakeItSnapshot) {
         themeMode = if (isDarkNow) ThemeMode.Light else ThemeMode.Dark
     }
 
-    /** Stand-in for the real Shizuku handshake, which is out of scope for this pass. */
-    fun connectShizuku() {
-        shizukuConnected = true
-    }
-
     fun snapshot(): ShakeItSnapshot = ShakeItSnapshot(
         sensitivity = sensitivity,
         gesture = gesture,
@@ -277,7 +292,6 @@ class ShakeItState(initial: ShakeItSnapshot) {
         runInBackground = runInBackground,
         themeMode = themeMode,
         dynamicColor = dynamicColor,
-        shizukuConnected = shizukuConnected,
         activations = activations,
     )
 

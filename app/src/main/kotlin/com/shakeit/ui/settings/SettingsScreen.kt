@@ -1,5 +1,6 @@
 package com.shakeit.ui.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,12 +20,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.BatteryAlert
 import androidx.compose.material.icons.rounded.BatteryFull
+import androidx.compose.material.icons.rounded.BatterySaver
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.FlashlightOn
 import androidx.compose.material.icons.rounded.Gesture
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.RestartAlt
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Sensors
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Vibration
@@ -34,6 +42,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +53,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shakeit.R
 import com.shakeit.background.PowerManagerVendor
+import com.shakeit.background.RestrictionState
+import com.shakeit.background.ShizukuState
+import com.shakeit.background.ShizukuStatus
+import com.shakeit.engine.DiagnosticsSnapshot
+import com.shakeit.engine.PrivilegedAction
+import com.shakeit.hardware.SensorDiagnostics
 import com.shakeit.state.Sensitivity
 import com.shakeit.state.ShakeGesture
 import com.shakeit.state.ShakeItState
@@ -57,22 +72,40 @@ import com.shakeit.ui.theme.ShakeItTheme
 import com.shakeit.ui.theme.ShakeItType
 
 /**
- * @param batteryUnrestricted whether the system exempts ShakeIT from battery
- *   optimisation. While that is true there is deliberately nothing to fix, so the
- *   row shows status text and no button — the user is never pushed into system
- *   settings they do not need.
- * @param vendor whose power manager is in charge, which decides which manual
- *   steps the hint describes; the vendor's auto-start manager has no public
- *   intent that survives an update, so it can only be explained.
+ * The settings screen, and the diagnostics page that lives at the bottom of it.
+ *
+ * Everything reported here comes from a [DiagnosticsSnapshot] the engine re-reads
+ * whenever the app is resumed, so the answers are facts about this device right
+ * now rather than stored preferences — including the ones that say "the platform
+ * will not tell me".
+ *
+ * @param diagnostics the current facts. Defaults to an empty snapshot so previews
+ *   and the first composition have something to render.
+ * @param onOpenBatterySettings opens the standard battery-optimisation screen;
+ *   only offered while the Doze answer is not "exempt", so the user is never
+ *   pushed into system settings they do not need.
+ * @param onOpenAppSettings opens this app's own system page, which is where every
+ *   vendor hides its auto-start and freezer menus.
+ * @param onOpenShizuku launches the Shizuku app, which is the only way to start
+ *   its service or undo a denial.
+ * @param onRequestShizukuPermission shows Shizuku's own grant dialog.
+ * @param onRepairDozeAllowlist asks Shizuku to put *this package* on the Doze
+ *   allowlist, then re-reads to confirm.
+ * @param onRepairBackgroundAppOp asks Shizuku to clear *this package's*
+ *   background-restriction app-op, then re-reads to confirm.
  */
 @Composable
 fun SettingsScreen(
     state: ShakeItState,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    batteryUnrestricted: Boolean = true,
-    vendor: PowerManagerVendor = PowerManagerVendor.Stock,
+    diagnostics: DiagnosticsSnapshot = DiagnosticsSnapshot(),
     onOpenBatterySettings: () -> Unit = {},
+    onOpenAppSettings: () -> Unit = {},
+    onOpenShizuku: () -> Unit = {},
+    onRequestShizukuPermission: () -> Unit = {},
+    onRepairDozeAllowlist: () -> Unit = {},
+    onRepairBackgroundAppOp: () -> Unit = {},
 ) {
     val colors = ShakeItTheme.colors
     ShakeItScreen(modifier = modifier) {
@@ -136,13 +169,28 @@ fun SettingsScreen(
                         title = "Gesture",
                         subtitle = state.gesture.label,
                     ) {
-                        SegmentedControl(
-                            options = ShakeGesture.values().toList(),
-                            selected = state.gesture,
-                            labelOf = { it.label },
-                            onSelect = { state.gesture = it },
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
+                        Column {
+                            SegmentedControl(
+                                options = ShakeGesture.values().toList(),
+                                selected = state.gesture,
+                                labelOf = { it.label },
+                                onSelect = { state.gesture = it },
+                                modifier = Modifier.padding(top = 6.dp),
+                            )
+                            // Said out loud rather than left implied: the
+                            // recognition layer implements Shake, and a control
+                            // that looks like it changes behaviour without
+                            // changing it is the same lie as a notification that
+                            // claims to be listening.
+                            if (state.gesture != ShakeGesture.Shake) {
+                                Text(
+                                    text = stringResource(R.string.gesture_not_implemented),
+                                    style = ShakeItType.finePrint,
+                                    color = colors.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
+                            }
+                        }
                     }
                     SettingsDivider()
                     SettingsSwitchRow(
@@ -205,26 +253,45 @@ fun SettingsScreen(
                 }
                 // Advanced Section
                 SettingsCardGroup {
-                    // The only row here that reports a real platform fact rather
-                    // than a stored preference, so it leads the card.
+                    val power = diagnostics.power
+                    val vendor = power?.vendor ?: PowerManagerVendor.Stock
+                    // One mechanism, named as itself: the Android/Doze
+                    // power-exemption allowlist. It used to be labelled
+                    // "Unrestricted", which read as a claim about every vendor
+                    // switch too — the other mechanisms are reported separately,
+                    // each with its own answer, in the diagnostics card below.
+                    val dozeExempt = power?.dozeExemption == RestrictionState.ALLOWED
                     SettingsControlRow(
-                        icon = if (batteryUnrestricted) Icons.Rounded.BatteryFull
+                        icon = if (dozeExempt) Icons.Rounded.BatteryFull
                         else Icons.Rounded.BatteryAlert,
                         title = stringResource(R.string.setting_background_reliability),
                         subtitle = stringResource(
-                            if (batteryUnrestricted) R.string.background_unrestricted
+                            if (dozeExempt) R.string.background_unrestricted
                             else R.string.background_restricted,
                         ),
                     ) {
-                        if (!batteryUnrestricted) {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (!dozeExempt) {
                                 OutlineButton(
                                     text = stringResource(R.string.background_open_settings),
                                     onClick = onOpenBatterySettings,
                                     modifier = Modifier.padding(top = 8.dp),
                                 )
-                                // Named steps for this device's own power manager,
-                                // which the platform will not open for us.
+                            }
+                            // ShakeIT's own app-info page: the doorway every
+                            // vendor uses for its battery, auto-start and
+                            // freezer menus, and the one screen an AOSP intent
+                            // can reliably open.
+                            OutlineButton(
+                                text = stringResource(R.string.background_open_app_settings),
+                                onClick = onOpenAppSettings,
+                                modifier = Modifier.padding(top = if (dozeExempt) 8.dp else 0.dp),
+                            )
+                            // Named steps for this device's own power manager.
+                            // Shown even when Android's own answer is fine,
+                            // because a vendor freezer or auto-start manager is a
+                            // different mechanism that this app cannot read.
+                            if (vendor != PowerManagerVendor.Stock || !dozeExempt) {
                                 Text(
                                     text = stringResource(
                                         when (vendor) {
@@ -246,19 +313,15 @@ fun SettingsScreen(
                     SettingsControlRow(
                         icon = Icons.Rounded.Build,
                         title = stringResource(R.string.setting_shizuku),
-                        subtitle = stringResource(
-                            if (state.shizukuConnected) R.string.shizuku_connected
-                            else R.string.shizuku_disconnected,
-                        ),
+                        subtitle = stringResource(shizukuSubtitle(diagnostics.shizuku.state)),
                     ) {
-                        OutlineButton(
-                            text = stringResource(
-                                if (state.shizukuConnected) R.string.shizuku_connect_done
-                                else R.string.shizuku_connect,
-                            ),
-                            onClick = state::connectShizuku,
-                            enabled = !state.shizukuConnected,
-                            modifier = Modifier.padding(top = 8.dp),
+                        ShizukuControls(
+                            status = diagnostics.shizuku,
+                            lastAction = diagnostics.lastPrivilegedAction,
+                            onOpenShizuku = onOpenShizuku,
+                            onRequestPermission = onRequestShizukuPermission,
+                            onRepairDozeAllowlist = onRepairDozeAllowlist,
+                            onRepairBackgroundAppOp = onRepairBackgroundAppOp,
                         )
                     }
                     SettingsDivider()
@@ -269,8 +332,292 @@ fun SettingsScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     )
                 }
+                // Diagnostics: the facts the app can prove about itself, on one
+                // page that is still there after the app is reopened — which is
+                // exactly when "it stopped working overnight" has to be answered.
+                // Nothing here is inferred from anything else, and a mechanism
+                // that will not answer says so instead of defaulting to "fine".
+                SettingsCardGroup {
+                    DiagnosticsRows(diagnostics)
+                }
                 Spacer(modifier = Modifier.height(20.dp))
             }
+        }
+    }
+}
+
+/**
+ * What Shizuku's own state means for this app, in the words the row shows.
+ *
+ * Five states rather than connected/not, because "installed but not running",
+ * "running but not granted" and "denied" all need a different action from the
+ * user, and only the last one is out of this app's hands.
+ */
+@StringRes
+private fun shizukuSubtitle(state: ShizukuState): Int = when (state) {
+    ShizukuState.NOT_INSTALLED -> R.string.shizuku_not_installed
+    ShizukuState.NOT_RUNNING -> R.string.shizuku_not_running
+    ShizukuState.PERMISSION_NEEDED -> R.string.shizuku_permission_needed
+    ShizukuState.DENIED -> R.string.shizuku_denied
+    ShizukuState.READY -> R.string.shizuku_ready
+}
+
+/**
+ * Shizuku's controls, offered only for the states where they can do something.
+ *
+ * The two repairs are the only privileged writes in the app. Both are explicit
+ * (a button, never automatic), both touch this package alone, and both are
+ * followed by a re-read so the reported result is what the platform now says
+ * rather than what the tap hoped for — that result is [lastAction].
+ */
+@Composable
+private fun ShizukuControls(
+    status: ShizukuStatus,
+    lastAction: PrivilegedAction?,
+    onOpenShizuku: () -> Unit,
+    onRequestPermission: () -> Unit,
+    onRepairDozeAllowlist: () -> Unit,
+    onRepairBackgroundAppOp: () -> Unit,
+) {
+    val colors = ShakeItTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        when (status.state) {
+            // Nothing to open and nothing to ask for: the row's own text says it
+            // is optional, and no button pretends otherwise.
+            ShizukuState.NOT_INSTALLED -> Unit
+            ShizukuState.NOT_RUNNING, ShizukuState.DENIED -> OutlineButton(
+                text = stringResource(R.string.shizuku_open),
+                onClick = onOpenShizuku,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            ShizukuState.PERMISSION_NEEDED -> OutlineButton(
+                text = stringResource(R.string.shizuku_grant),
+                onClick = onRequestPermission,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            ShizukuState.READY -> {
+                OutlineButton(
+                    text = stringResource(R.string.shizuku_repair_doze),
+                    onClick = onRepairDozeAllowlist,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                OutlineButton(
+                    text = stringResource(R.string.shizuku_repair_appop),
+                    onClick = onRepairBackgroundAppOp,
+                )
+            }
+        }
+        if (lastAction != null) {
+            Text(
+                text = (if (lastAction.succeeded) "Changed — " else "Not changed — ") +
+                    lastAction.description,
+                style = ShakeItType.finePrint,
+                color = if (lastAction.succeeded) colors.accent else colors.primary,
+            )
+        }
+        if (status.state != ShizukuState.NOT_INSTALLED) {
+            Text(
+                text = stringResource(R.string.shizuku_not_root),
+                style = ShakeItType.finePrint,
+                color = colors.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** One line of the diagnostics report: an optional icon, a label and a fact. */
+private class DiagnosticsRow(
+    val icon: ImageVector?,
+    val title: String,
+    val value: String,
+)
+
+/**
+ * The diagnostics report.
+ *
+ * Rows with an icon are the headline answers; the rest continue underneath them,
+ * indented to the same text column, so the card reads as three short reports
+ * (service and detector, sensors and wake lock, power policy and history) rather
+ * than seventeen unrelated settings.
+ */
+@Composable
+private fun DiagnosticsRows(diagnostics: DiagnosticsSnapshot) {
+    val sensor: SensorDiagnostics = diagnostics.sensor
+    val power = diagnostics.power
+    // Keyed on the snapshot so an age is recomputed when new facts arrive, and
+    // not on every recomposition, which would make the page flicker.
+    val nowMillis = remember(diagnostics) { System.currentTimeMillis() }
+
+    val rows = listOf(
+        DiagnosticsRow(
+            icon = Icons.Rounded.Notifications,
+            title = "Service",
+            value = DiagnosticsText.service(
+                running = diagnostics.serviceRunning,
+                wanted = diagnostics.wantsBackgroundService,
+            ),
+        ),
+        DiagnosticsRow(
+            icon = Icons.Rounded.Sensors,
+            title = "Detector",
+            value = DiagnosticsText.detector(
+                status = diagnostics.detectionStatus,
+                attempts = diagnostics.recoveryAttempts,
+                maxAttempts = diagnostics.maxRecoveryAttempts,
+            ),
+        ),
+        DiagnosticsRow(
+            icon = Icons.Rounded.Schedule,
+            title = "Last accelerometer sample",
+            value = DiagnosticsText.lastSample(sensor),
+        ),
+        DiagnosticsRow(
+            icon = null,
+            title = "Accelerometer",
+            value = DiagnosticsText.accelerometer(sensor),
+        ),
+        DiagnosticsRow(
+            icon = null,
+            title = "Listener registration",
+            value = DiagnosticsText.registration(sensor),
+        ),
+        DiagnosticsRow(
+            icon = null,
+            title = "Wake lock",
+            value = DiagnosticsText.wakeLock(sensor),
+        ),
+        DiagnosticsRow(
+            icon = null,
+            title = "Proximity (pocket guard)",
+            value = DiagnosticsText.proximity(sensor),
+        ),
+        DiagnosticsRow(
+            icon = null,
+            title = "Significant motion trigger",
+            value = DiagnosticsText.significantMotion(sensor),
+        ),
+        DiagnosticsRow(
+            icon = Icons.Rounded.BatterySaver,
+            title = "Doze exemption",
+            value = DiagnosticsText.dozeExemption(power?.dozeExemption),
+        ),
+        DiagnosticsRow(
+            icon = null,
+            title = "Background activity (app-op)",
+            value = DiagnosticsText.backgroundAppOps(power?.backgroundAppOps),
+        ),
+        DiagnosticsRow(
+            icon = null,
+            title = "Vendor auto-start",
+            value = DiagnosticsText.autoStart(power?.autoStart),
+        ),
+        DiagnosticsRow(
+            icon = null,
+            title = "Low Power Standby",
+            value = DiagnosticsText.lowPowerStandby(power?.lowPowerStandby),
+        ),
+        DiagnosticsRow(
+            icon = null,
+            title = "Power mode",
+            value = DiagnosticsText.powerModeRightNow(
+                deviceIdle = power?.deviceIdleMode ?: false,
+                powerSave = power?.powerSaveMode ?: false,
+            ),
+        ),
+        DiagnosticsRow(
+            icon = Icons.Rounded.BugReport,
+            title = "Previous process exit",
+            value = DiagnosticsText.previousExit(
+                exit = diagnostics.previousExit,
+                supported = diagnostics.exitHistorySupported,
+                nowMillis = nowMillis,
+            ),
+        ),
+        DiagnosticsRow(
+            icon = null,
+            title = "This process",
+            value = DiagnosticsText.processUptime(diagnostics.processUptimeMillis),
+        ),
+        DiagnosticsRow(
+            icon = null,
+            title = "Shizuku",
+            value = DiagnosticsText.shizuku(diagnostics.shizuku),
+        ),
+        DiagnosticsRow(
+            icon = Icons.Rounded.PhoneAndroid,
+            title = "Device",
+            value = power?.let {
+                DiagnosticsText.device(it.manufacturer, it.model, it.sdkInt)
+            } ?: "Not read yet",
+        ),
+        DiagnosticsRow(
+            icon = Icons.Rounded.Speed,
+            title = "Preferences",
+            value = "Detection ${if (diagnostics.wantsDetection) "on" else "off"} · " +
+                "background ${if (diagnostics.wantsBackgroundService) "on" else "off"} · " +
+                "reboot ${if (diagnostics.wantsStartAfterReboot) "on" else "off"} · " +
+                "auto-off ${if (diagnostics.wantsAutoOff) "on" else "off"} · " +
+                "sensitivity ${diagnostics.sensitivity}",
+        ),
+    )
+
+    rows.forEachIndexed { index, row ->
+        if (index > 0) SettingsDivider()
+        SettingsInfoRow(icon = row.icon, title = row.title, value = row.value)
+    }
+}
+
+/**
+ * A read-only row: a label and the fact beside it.
+ *
+ * Rows without an icon are continuations of the row above, so they are indented
+ * to the same text column (16dp padding + 24dp icon + 16dp gap) instead of
+ * starting at the card edge.
+ */
+@Composable
+private fun SettingsInfoRow(
+    icon: ImageVector?,
+    title: String,
+    value: String,
+) {
+    val colors = ShakeItTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = if (icon == null) 56.dp else 16.dp,
+                end = 16.dp,
+                top = 12.dp,
+                bottom = 12.dp,
+            ),
+        verticalAlignment = Alignment.Top,
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = colors.onSurfaceVariant,
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = title,
+                style = ShakeItType.rowLabel.copy(
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                ),
+                color = colors.onSurface,
+            )
+            Text(
+                text = value,
+                style = ShakeItType.caption,
+                color = colors.onSurfaceVariant,
+            )
         }
     }
 }

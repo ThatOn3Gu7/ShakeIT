@@ -75,6 +75,12 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation("androidx.compose.material:material-icons-extended")
+
+    // Optional at runtime and the only privileged path in the app: when Shizuku
+    // is absent everything degrades to what standard Android allows, and the UI
+    // says so rather than claiming a connection it does not have.
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 

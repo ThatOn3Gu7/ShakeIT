@@ -279,6 +279,41 @@ class ShakeAlgorithmTest {
         assertEquals(0, fires)
     }
 
+    // ------------------------------------------------------------------
+    // Sensitivity
+    // ------------------------------------------------------------------
+
+    @Test
+    fun `a deliberate shake is recognised at every sensitivity level`() {
+        // The slider may make the gesture easier or harder to trigger; it must
+        // never break the one it ships with.
+        (SENSITIVITY_MIN..SENSITIVITY_MAX).forEach { level ->
+            val fires = ShakeAlgorithm(shakeConfigFor(level)).feed(
+                still(0.4f),
+                shake(0.8f, hz = 4f, peak = 25f),
+                still(0.4f),
+            )
+
+            assertEquals("level $level", 1, fires)
+        }
+    }
+
+    @Test
+    fun `a gentle shake counts at the most sensitive level and not at the least`() {
+        // The same stream as the threshold test above — 12 m/s² is under the
+        // shipped 14 m/s² bar — driven through the two ends of the slider. If
+        // this ever fires at both levels or at neither, the setting is cosmetic.
+        fun firesAt(level: Int) = ShakeAlgorithm(shakeConfigFor(level)).feed(
+            still(0.3f),
+            shake(2f, hz = 5f, peak = 12f),
+            still(0.4f),
+        )
+
+        assertEquals(1, firesAt(SENSITIVITY_MAX))
+        assertEquals(0, firesAt(SENSITIVITY_MIN))
+        assertEquals(0, firesAt(SENSITIVITY_DEFAULT))
+    }
+
     private companion object {
         /** When the shake phase begins in the timelines above, in seconds. */
         const val SHAKE_STARTS_AT = 0.4f

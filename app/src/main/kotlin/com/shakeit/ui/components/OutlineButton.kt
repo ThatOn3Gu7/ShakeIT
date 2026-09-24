@@ -25,9 +25,12 @@ private val ButtonShape = RoundedCornerShape(14.dp)
  * background, `--primary` 600-weight 13.5px label, 11px padding, 14px radius.
  *
  * The prototype defines neither an `:active` nor a `:disabled` style for this
- * button — pressing "Connect Shizuku" simply relabels it to "Connected" and
- * makes it inert — so the disabled state is reproduced as `enabled = false`
- * with the visuals left untouched.
+ * button, so the disabled state is reproduced as `enabled = false` with the
+ * visuals left untouched. In the prototype the only disabled case was "Connect
+ * Shizuku" relabelling itself to "Connected" and going inert; the real Shizuku
+ * row offers a different action per connection state instead, so nothing in the
+ * app disables a button any more — and `enabled` stays for the component's own
+ * sake rather than for a caller.
  */
 @Composable
 fun OutlineButton(

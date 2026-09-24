@@ -169,13 +169,19 @@ private fun HomeHeaderSection(
                 value = stringResource(
                     when (detectionStatus) {
                         DetectionStatus.ACTIVE -> R.string.status_detection_active
+                        DetectionStatus.RECOVERING -> R.string.status_detection_recovering
                         DetectionStatus.STALLED -> R.string.status_detection_stalled
+                        DetectionStatus.NO_SENSOR -> R.string.status_detection_no_sensor
                         DetectionStatus.INACTIVE -> R.string.status_detection_paused
                     },
                 ),
                 valueColor = when (detectionStatus) {
                     DetectionStatus.ACTIVE -> colors.accent
+                    // Both of these mean "not working right now", and both are
+                    // worth the accent colour rather than the muted one.
+                    DetectionStatus.RECOVERING -> colors.primary
                     DetectionStatus.STALLED -> colors.primary
+                    DetectionStatus.NO_SENSOR -> colors.onSurfaceVariant
                     DetectionStatus.INACTIVE -> colors.onSurfaceVariant
                 },
             )
