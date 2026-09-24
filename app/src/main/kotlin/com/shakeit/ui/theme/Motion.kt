@@ -50,6 +50,12 @@ object ShakeItMotion {
         visibilityThreshold = 0.001f,
     )
 
+    /** The same immediate micro-interaction spring for measured Dp properties. */
+    val SnapDp: SpringSpec<Dp> = spring(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = 1_100f,
+    )
+
     /**
      * Things settling into a new state and staying there: an expanded section, a
      * size change, the hero returning from a press. Slower than [Snap] so the
