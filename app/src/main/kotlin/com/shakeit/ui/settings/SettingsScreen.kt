@@ -287,7 +287,6 @@ private fun SensitivitySteps(
         modifier = modifier
             .height(48.dp)
             .semantics {
-                role = Role.Slider
                 stateDescription = Sensitivity.label(value)
             },
         horizontalArrangement = Arrangement.spacedBy(6.dp),

@@ -398,7 +398,7 @@ private fun ShakeInstructionCard(modifier: Modifier = Modifier) {
                 contentColor = colors.onTertiaryContainer,
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Gesture, contentDescription = null, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Rounded.Sensors, contentDescription = null, modifier = Modifier.size(24.dp))
                 }
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
