@@ -212,7 +212,9 @@ internal object DiagnosticsText {
             "Stopped by the user — Recents swipe, force stop, or a vendor's \"close app\""
         ExitReason.UserStopped -> "The Android user was stopped"
         ExitReason.DependencyDied -> "A process it depended on died"
-        ExitReason.Other -> "Other"
+        // REASON_OTHER is the platform's own catch-all, so the honest wording is
+        // that it did not name one — not a second "Other" that says nothing.
+        ExitReason.Other -> "Stopped for a reason the platform did not name"
         ExitReason.Freezer -> "Frozen by the cached-app freezer"
         ExitReason.PackageStateChange -> "Package state changed"
         ExitReason.PackageUpdated -> "The app was updated"
