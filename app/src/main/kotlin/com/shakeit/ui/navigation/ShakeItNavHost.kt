@@ -6,10 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.awaitPointerEvent
-import androidx.compose.ui.input.pointer.awaitPointerEventScope
-import androidx.compose.ui.input.pointer.consume
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.shakeit.state.ShakeItState
@@ -47,13 +43,6 @@ fun ShakeItNavHost(
     Box(modifier.fillMaxSize()) {
         ScreenLayer(progress = homeProgress, content = home)
 
-        if (settingsShown) {
-            // Swallow touches that land on the Home layer while Settings enters.
-            // This is not a UI action; it simply preserves the destination's
-            // modal ordering during the interruptible transition.
-            Box(Modifier.fillMaxSize().consumeEveryPointerEvent())
-        }
-
         if (settingsShown || settingsProgress > 0.001f) {
             ScreenLayer(progress = settingsProgress, content = settings)
         }
@@ -72,14 +61,5 @@ private fun ScreenLayer(progress: Float, content: @Composable () -> Unit) {
         content = { content() },
     )
 }
-
-private fun Modifier.consumeEveryPointerEvent(): Modifier =
-    pointerInput(Unit) {
-        awaitPointerEventScope {
-            while (true) {
-                awaitPointerEvent().changes.forEach { change -> change.consume() }
-            }
-        }
-    }
 
 private val HIDDEN_TRANSLATION_X = 28.dp
