@@ -3,7 +3,12 @@ package com.shakeit.ui.settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -49,12 +54,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.consume
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -283,29 +291,62 @@ private fun SensitivitySteps(
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
+    val currentOnValueChange by rememberUpdatedState(onValueChange)
+
+    fun levelAt(x: Float, width: Float): Int {
+        if (width <= 0f) return Sensitivity.MIN
+        val slotWidth = width / (Sensitivity.MAX - Sensitivity.MIN + 1).toFloat()
+        return kotlin.math.floor(x / slotWidth)
+            .toInt()
+            .plus(Sensitivity.MIN)
+            .coerceIn(Sensitivity.MIN, Sensitivity.MAX)
+    }
+
     Row(
         modifier = modifier
             .height(48.dp)
             .semantics {
                 stateDescription = Sensitivity.label(value)
+            }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val horizontal = awaitHorizontalTouchSlopOrCancellation(down.id) { change, _ ->
+                        // Wait for horizontal intent before consuming. Vertical
+                        // movement therefore remains a normal Settings scroll.
+                        change.consume()
+                        currentOnValueChange(levelAt(change.position.x, size.width))
+                    }
+                    if (horizontal != null) {
+                        horizontalDrag(horizontal.id) { change ->
+                            change.consume()
+                            currentOnValueChange(levelAt(change.position.x, size.width))
+                        }
+                    }
+                }
             },
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         (Sensitivity.MIN..Sensitivity.MAX).forEach { level ->
-            val selected = level <= value
+            val selected = level == value
+            val height by animateDpAsState(
+                targetValue = if (selected) 28.dp else 18.dp,
+                animationSpec = ShakeItMotion.Snap,
+                label = "sensitivityLevelHeight$level",
+            )
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(if (level == value) 28.dp else 18.dp)
+                    .height(height)
                     .background(
-                        color = if (selected) colors.primary else colors.outlineVariant,
+                        color = if (level <= value) colors.primary else colors.outlineVariant,
                         shape = RoundedCornerShape(50),
                     )
                     .clickable(
                         onClickLabel = Sensitivity.label(level),
                         role = Role.Button,
-                        onClick = { onValueChange(level) },
+                        onClick = { currentOnValueChange(level) },
                     ),
             )
         }
