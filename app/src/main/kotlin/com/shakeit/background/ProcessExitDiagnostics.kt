@@ -191,7 +191,9 @@ class ProcessExitDiagnostics(context: Context) {
         description = description,
         importanceCode = importance,
         pid = pid,
-        pssKilobytes = pssKilobytes,
+        // ApplicationExitInfo.getPss() is already in kilobytes; the unit is in
+        // this field's name rather than left to be remembered.
+        pssKilobytes = pss,
     )
 
     private companion object {
