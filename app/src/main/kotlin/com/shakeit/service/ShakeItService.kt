@@ -9,6 +9,8 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.Build
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.shakeit.ShakeItApplication
@@ -68,6 +70,7 @@ class ShakeItService : Service() {
     override fun onCreate() {
         super.onCreate()
         engine = (application as ShakeItApplication).engine
+        Log.i(TAG, "onCreate process=${processName()}")
         ContextCompat.registerReceiver(
             this,
             commandReceiver,
@@ -80,6 +83,7 @@ class ShakeItService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.i(TAG, "onStartCommand startId=$startId process=${processName()} intent=${intent != null}")
         // 1. Foreground, before anything else — see the class documentation.
         engine.onServiceStarted()
         goForeground()
@@ -112,11 +116,13 @@ class ShakeItService : Service() {
      * recovery point rather than swallowed.
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.i(TAG, "onTaskRemoved process=${processName()}")
         if (::engine.isInitialized) engine.onTaskRemoved()
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
+        Log.w(TAG, "onDestroy process=${processName()}")
         unregisterReceiver(commandReceiver)
         scope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -181,7 +187,15 @@ class ShakeItService : Service() {
         }
     }
 
+    private fun processName(): String = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        android.app.Application.getProcessName()
+    } else {
+        "unknown"
+    }
+
     companion object {
+        private const val TAG = "ShakeItService"
+
         /** An explicit intent for this service, used both to start and to stop it. */
         fun intent(context: Context): Intent = Intent(context, ShakeItService::class.java)
     }

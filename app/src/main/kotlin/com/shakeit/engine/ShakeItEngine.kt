@@ -139,6 +139,7 @@ class ShakeItEngine(private val context: Context) {
     val serviceRunning: StateFlow<Boolean> = _serviceRunning.asStateFlow()
 
     private val _diagnostics = MutableStateFlow(DiagnosticsSnapshot())
+    private var authoritativeSensorDiagnostics = SensorDiagnostics()
 
     /** Every fact about background reliability, refreshed by the watchdog. */
     val diagnostics: StateFlow<DiagnosticsSnapshot> = _diagnostics.asStateFlow()
@@ -179,6 +180,19 @@ class ShakeItEngine(private val context: Context) {
                 SensorProcessContract.EXTRA_SERVICE_RUNNING,
                 false,
             )
+            if (intent.getBooleanExtra(SensorProcessContract.EXTRA_SENSOR_DIAGNOSTICS, false)) {
+                authoritativeSensorDiagnostics = SensorDiagnostics(
+                    accelerometerAvailable = intent.getBooleanExtra(SensorProcessContract.EXTRA_ACCELEROMETER_AVAILABLE, false),
+                    accelerometerWakeUp = intent.getBooleanExtra(SensorProcessContract.EXTRA_ACCELEROMETER_WAKE_UP, false),
+                    registrationSucceeded = intent.getBooleanExtra(SensorProcessContract.EXTRA_REGISTRATION_SUCCEEDED, false),
+                    wakeLockRequired = intent.getBooleanExtra(SensorProcessContract.EXTRA_WAKE_LOCK_REQUIRED, false),
+                    wakeLockHeld = intent.getBooleanExtra(SensorProcessContract.EXTRA_WAKE_LOCK_HELD, false),
+                    hasDeliveredSample = intent.getBooleanExtra(SensorProcessContract.EXTRA_HAS_DELIVERED_SAMPLE, false),
+                    millisSinceLastSample = intent.getLongExtra(SensorProcessContract.EXTRA_MILLIS_SINCE_SAMPLE, -1L)
+                        .takeUnless { it < 0L },
+                    recoveries = intent.getIntExtra(SensorProcessContract.EXTRA_RECOVERIES, 0),
+                )
+            }
             publishDiagnostics()
         }
     }
@@ -196,6 +210,7 @@ class ShakeItEngine(private val context: Context) {
      * place where it is allowed.
      */
     fun start() {
+        Log.i(TAG, "engine start process=${currentProcessName(context)} sensorProcess=$isSensorProcess previousExit=$previousExit")
         torch.start()
         if (!isSensorProcess) {
             ContextCompat.registerReceiver(
@@ -210,7 +225,10 @@ class ShakeItEngine(private val context: Context) {
         scope.launch {
             torch.torchOn.collect { torchOn -> rescheduleAutoOff(torchOn) }
         }
-        startWatchdog()
+        // Only a process that owns detection may supervise or publish local sensor
+        // state. In background mode that is exclusively :sensor; a UI detector is
+        // intentionally absent and must never be classified as INACTIVE.
+        if (isSensorProcess || !preferences.runInBackground) startWatchdog()
         applyPreferences(fromUserAction = false)
     }
 
@@ -671,6 +689,7 @@ class ShakeItEngine(private val context: Context) {
     }
 
     private fun publishStatus() {
+        if (!isSensorProcess && preferences.runInBackground) return
         val status = classify(detector)
         val previous = _detectionStatus.value
         _detectionStatus.value = status
@@ -682,7 +701,19 @@ class ShakeItEngine(private val context: Context) {
                     .putExtra(
                         SensorProcessContract.EXTRA_SERVICE_RUNNING,
                         _serviceRunning.value,
-                    ),
+                    ).also { intent ->
+                        val sensor = detector?.diagnostics() ?: SensorDiagnostics()
+                        intent.putExtra(SensorProcessContract.EXTRA_SENSOR_DIAGNOSTICS, true)
+                            .putExtra(SensorProcessContract.EXTRA_ACCELEROMETER_AVAILABLE, sensor.accelerometerAvailable)
+                            .putExtra(SensorProcessContract.EXTRA_ACCELEROMETER_WAKE_UP, sensor.accelerometerWakeUp)
+                            .putExtra(SensorProcessContract.EXTRA_REGISTRATION_SUCCEEDED, sensor.registrationSucceeded)
+                            .putExtra(SensorProcessContract.EXTRA_WAKE_LOCK_REQUIRED, sensor.wakeLockRequired)
+                            .putExtra(SensorProcessContract.EXTRA_WAKE_LOCK_HELD, sensor.wakeLockHeld)
+                            .putExtra(SensorProcessContract.EXTRA_HAS_DELIVERED_SAMPLE, sensor.hasDeliveredSample)
+                            .putExtra(SensorProcessContract.EXTRA_MILLIS_SINCE_SAMPLE, sensor.millisSinceLastSample ?: -1L)
+                            .putExtra(SensorProcessContract.EXTRA_RECOVERIES, sensor.recoveries)
+                    },
+
             )
         }
         if (previous != status) {
@@ -699,10 +730,11 @@ class ShakeItEngine(private val context: Context) {
     }
 
     private fun publishDiagnostics() {
+        val backgroundOwner = !isSensorProcess && preferences.runInBackground
         _diagnostics.value = DiagnosticsSnapshot(
             serviceRunning = _serviceRunning.value,
             detectionStatus = _detectionStatus.value,
-            sensor = detector?.diagnostics() ?: SensorDiagnostics(),
+            sensor = if (backgroundOwner) authoritativeSensorDiagnostics else detector?.diagnostics() ?: SensorDiagnostics(),
             wantsDetection = preferences.detectionActive,
             wantsBackgroundService = preferences.runInBackground,
             wantsStartAfterReboot = preferences.startAfterReboot,
