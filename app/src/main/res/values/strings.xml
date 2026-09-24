@@ -15,9 +15,14 @@
     <string name="home_flashlight_off">Flashlight off</string>
     <string name="home_light_is_on">Shake to turn it off</string>
     <string name="home_light_is_off">Shake to turn it on</string>
+    <string name="home_light_is_on_double">Double shake to turn it off</string>
+    <string name="home_light_is_off_double">Double shake to turn it on</string>
     <string name="shake_instruction_title">Shake to toggle</string>
     <string name="shake_instruction_body">Give your phone a quick shake</string>
     <string name="shake_instruction_accessibility">Shake to toggle. Give your phone a quick shake. This is an instruction, not a button.</string>
+    <string name="double_shake_instruction_title">Double shake to toggle</string>
+    <string name="double_shake_instruction_body">Give your phone two quick shakes</string>
+    <string name="double_shake_instruction_accessibility">Double shake to toggle. Give your phone two quick shakes. This is an instruction, not a button.</string>
     <string name="home_activity_label">Activity</string>
     <string name="home_activity_value">%1$d flashlight activations</string>
     <string name="home_activity_note">Real activity only</string>
@@ -78,7 +83,6 @@
     <string name="group_advanced">Advanced</string>
     <string name="setting_sensitivity">Sensitivity</string>
     <string name="setting_detection_active">Detection active</string>
-    <string name="gesture_not_implemented">Only “Shake” is recognised today. Double-shake and flip &amp; shake come from the design prototype and are not implemented yet — detection keeps using Shake.</string>
     <string name="setting_auto_off">Auto-off after 5 min</string>
     <string name="setting_start_after_reboot">Start after reboot</string>
     <string name="setting_run_in_background">Run in background</string>

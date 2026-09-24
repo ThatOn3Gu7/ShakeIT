@@ -94,6 +94,7 @@ fun ShakeItApp(
                         torchOn = state.torchOn,
                         activations = state.activations,
                         detectionStatus = detectionStatus,
+                        gesture = state.gesture,
                         detectedShake = state.detectedShake,
                         animateBlob = state.screen == ShakeItState.Screen.HOME,
                         onToggleTorch = engine::toggleTorch,

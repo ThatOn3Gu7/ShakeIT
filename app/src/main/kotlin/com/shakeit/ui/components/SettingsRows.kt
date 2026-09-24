@@ -127,6 +127,7 @@ fun SettingsRow(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    subtitleContent: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     iconContainer: Color = MaterialTheme.colorScheme.secondaryContainer,
     iconContent: Color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -149,8 +150,9 @@ fun SettingsRow(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            if (subtitle != null) {
-                Text(
+            when {
+                subtitleContent != null -> subtitleContent()
+                subtitle != null -> Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -227,6 +229,7 @@ fun SettingsControlRow(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    subtitleContent: (@Composable () -> Unit)? = null,
     alignToText: Boolean = true,
     control: @Composable ColumnScope.() -> Unit,
 ) {
@@ -235,7 +238,12 @@ fun SettingsControlRow(
             .fillMaxWidth()
             .padding(bottom = 12.dp),
     ) {
-        SettingsRow(icon = icon, title = title, subtitle = subtitle)
+        SettingsRow(
+            icon = icon,
+            title = title,
+            subtitle = subtitle,
+            subtitleContent = subtitleContent,
+        )
         Column(
             modifier = Modifier
                 .fillMaxWidth()

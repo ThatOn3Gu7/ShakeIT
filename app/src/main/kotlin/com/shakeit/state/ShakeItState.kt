@@ -13,24 +13,53 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 
-/** `.seg-btn` options inside the "Shake mechanics" group. */
+/** The supported gesture modes. */
 enum class ShakeGesture(val label: String) {
     Shake("Shake"),
-    DoubleShake("Double-shake"),
-    FlipAndShake("Flip & shake"),
-}
-
-/** `.seg-btn` options inside the "Appearance" group, i.e. `data-theme` on `<html>`. */
-enum class ThemeMode(val label: String) {
-    Light("Light"),
-    Dark("Dark"),
-    System("System"),
+    DoubleShake("Double Shake"),
 }
 
 /**
- * The `<input type="range" min="1" max="5">` in the prototype plus its label
- * lookup table (`sensNames`).
+ * The time gate for Double Shake.
+ *
+ * The accelerometer pipeline already emits distinct, debounced shake events. This
+ * small state machine only decides whether one event is the first half of a pair
+ * or completes the pair. It has no Android or coroutine dependency, which makes
+ * the boundary easy to test and keeps the engine's lifecycle reset explicit.
  */
+class DoubleShakeGate(
+    private val timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
+) {
+    private var firstShakeAtMillis: Long? = null
+
+    /**
+     * Accepts one valid shake event. Returns true only for the second event of a
+     * pair. An event arriving after the timeout becomes a new first event rather
+     * than toggling immediately.
+     */
+    fun accept(nowMillis: Long): Boolean {
+        val first = firstShakeAtMillis
+        if (first == null || nowMillis - first > timeoutMillis || nowMillis < first) {
+            firstShakeAtMillis = nowMillis
+            return false
+        }
+        firstShakeAtMillis = null
+        return true
+    }
+
+    fun reset() {
+        firstShakeAtMillis = null
+    }
+
+    fun isWaiting(): Boolean = firstShakeAtMillis != null
+
+    companion object {
+        /** Tunable middle of the requested roughly one-to-two-second window. */
+        const val DEFAULT_TIMEOUT_MILLIS = 1_500L
+    }
+}
+
+/** The sensitivity slider's five discrete levels. */
 object Sensitivity {
     const val MIN = 1
     const val MAX = 5
@@ -39,15 +68,6 @@ object Sensitivity {
     fun label(value: Int): String = LABELS[(value - MIN).coerceIn(0, LABELS.lastIndex)]
 }
 
-/**
- * Everything that survives a process restart.
- *
- * `torchOn` is deliberately *not* here. It is hardware state, not a preference:
- * the camera service drops the torch when its client dies, so a persisted `true`
- * would be a lie at the next launch — and since the blob animates towards its
- * target, that lie would play out as a visible OFF morph on every cold start.
- * The screen starts at "off" and is corrected by the hardware mirror.
- */
 @Immutable
 data class ShakeItSnapshot(
     val sensitivity: Int,
@@ -61,16 +81,6 @@ data class ShakeItSnapshot(
     val activations: Int,
 )
 
-/**
- * Initial values, read straight off the prototype's markup: sensitivity 3
- * ("Medium"), detection/reboot/background/dynamic-color on, auto-off off,
- * `statActivations` = 7.
- *
- * The theme segmented control is marked "Light" in the HTML but the page starts
- * with no `data-theme` attribute, so it actually follows the system until the
- * user taps something — `ThemeMode.System` reproduces that behaviour and keeps
- * the highlighted segment honest.
- */
 val DefaultShakeItSnapshot = ShakeItSnapshot(
     sensitivity = 3,
     gesture = ShakeGesture.Shake,
@@ -83,19 +93,11 @@ val DefaultShakeItSnapshot = ShakeItSnapshot(
     activations = 7,
 )
 
-/**
- * Backing store. `SharedPreferences` keeps the prototype dependency-free while
- * still making settings (and the activation counter) survive a restart, which
- * `rememberSaveable` alone would not.
- */
 class ShakeItStore(context: Context) {
-
-    private val prefs =
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     fun read(fallback: ShakeItSnapshot): ShakeItSnapshot = ShakeItSnapshot(
-        sensitivity = prefs.getInt(KEY_SENSITIVITY, fallback.sensitivity)
-            .coerceIn(Sensitivity.MIN, Sensitivity.MAX),
+        sensitivity = prefs.getInt(KEY_SENSITIVITY, fallback.sensitivity).coerceIn(Sensitivity.MIN, Sensitivity.MAX),
         gesture = readGesture(KEY_GESTURE, fallback.gesture),
         detectionActive = prefs.getBoolean(KEY_DETECTION_ACTIVE, fallback.detectionActive),
         autoOffAfterFiveMinutes = prefs.getBoolean(KEY_AUTO_OFF, fallback.autoOffAfterFiveMinutes),
@@ -120,25 +122,8 @@ class ShakeItStore(context: Context) {
             .apply()
     }
 
-    /**
-     * Observes preference changes.
-     *
-     * The engine listens rather than being told: the switches live in the UI, but
-     * what they control — the detector, the service, the boot receiver — lives in
-     * the process. Both read this one file, and `SharedPreferences` hands the same
-     * in-memory instance to every caller in a process, so a write from a
-     * composition reaches the engine without either knowing about the other.
-     *
-     * The listener is held weakly by the platform, so callers must keep a strong
-     * reference to it — which is why the engine stores its own.
-     */
-    fun addChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-    }
-
-    fun removeChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
-        prefs.unregisterOnSharedPreferenceChangeListener(listener)
-    }
+    fun addChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) = prefs.registerOnSharedPreferenceChangeListener(listener)
+    fun removeChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) = prefs.unregisterOnSharedPreferenceChangeListener(listener)
 
     private fun readGesture(key: String, fallback: ShakeGesture): ShakeGesture {
         val name = prefs.getString(key, null) ?: return fallback
@@ -150,11 +135,6 @@ class ShakeItStore(context: Context) {
         return ThemeMode.values().firstOrNull { it.name == name } ?: fallback
     }
 
-    /**
-     * Key names are not private: the engine reacts to specific preferences, and
-     * spelling them out twice is how a rename silently breaks background
-     * detection.
-     */
     companion object {
         const val PREFS_NAME = "shakeit_state"
         const val KEY_SENSITIVITY = "sensitivity"
@@ -169,61 +149,19 @@ class ShakeItStore(context: Context) {
     }
 }
 
-/**
- * Single source of truth for both screens. Held above the theme and the
- * navigation stack so that navigating, toggling the torch and editing settings
- * never tear state apart.
- */
 @Stable
 class ShakeItState(initial: ShakeItSnapshot) {
-
-    /** Which screen is currently on top. Deliberately not persisted. */
-    var screen by mutableStateOf(Screen.HOME)
-
-    /**
-     * The real flashlight, mirrored from [com.shakeit.engine.ShakeItEngine].
-     * Drives the hero blob, the state word and the stats.
-     *
-     * Always starts false: the torch is off when a process starts, and the mirror
-     * corrects this the moment the hardware says otherwise.
-     */
+    var screen by mutableStateOf(ShakeItState.Screen.HOME)
     var torchOn by mutableStateOf(false)
         private set
-
-    /** `.stat-num` for "Activations" — incremented every time the torch turns on. */
     var activations by mutableIntStateOf(initial.activations)
         private set
-
-    /**
-     * Bumped by [simulateShake] to request one shake from the screen. The hero
-     * observes it, plays the `@keyframes wobble` animation and toggles 380 ms in
-     * — the same sequence the prototype's "Shake to toggle" button runs, except
-     * that the toggle now drives real hardware.
-     */
     var shakeRequest by mutableIntStateOf(0)
         private set
-
-    /**
-     * Bumped by [onShakeDetected] when the accelerometer recognised a shake.
-     * The hero wobbles exactly like [shakeRequest] does, but must not toggle
-     * anything: the engine has already flipped the torch, so a second toggle
-     * here would put the light back the way it was.
-     */
     var detectedShake by mutableIntStateOf(0)
         private set
-
-    /**
-     * Backing value for [sensitivity]. Private so the clamp in [setSensitivity]
-     * cannot be bypassed — and because a public `var sensitivity` would generate
-     * its own `setSensitivity(int)` accessor and clash with that function's JVM
-     * signature.
-     */
     private var sensitivityValue by mutableIntStateOf(initial.sensitivity)
-
-    /** The range input's current value. Change it through [setSensitivity]. */
-    val sensitivity: Int
-        get() = sensitivityValue
-
+    val sensitivity: Int get() = sensitivityValue
     var gesture by mutableStateOf(initial.gesture)
     var detectionActive by mutableStateOf(initial.detectionActive)
     var autoOffAfterFiveMinutes by mutableStateOf(initial.autoOffAfterFiveMinutes)
@@ -231,86 +169,29 @@ class ShakeItState(initial: ShakeItSnapshot) {
     var runInBackground by mutableStateOf(initial.runInBackground)
     var themeMode by mutableStateOf(initial.themeMode)
     var dynamicColor by mutableStateOf(initial.dynamicColor)
+    val sensitivityLabel: String get() = Sensitivity.label(sensitivity)
 
-    val sensitivityLabel: String
-        get() = Sensitivity.label(sensitivity)
-
-    /**
-     * `<input type="range" min="1" max="5">` cannot produce an out-of-range
-     * value, and neither can this — a corrupted preference is clamped back
-     * inside the bounds the label table covers.
-     */
-    fun setSensitivity(value: Int) {
-        sensitivityValue = value.coerceIn(Sensitivity.MIN, Sensitivity.MAX)
-    }
-
-    /**
-     * The only write path for [torchOn]: the engine reports what the hardware
-     * did and this mirrors it. There is no `toggleTorch()` here on purpose — if
-     * the screen flipped its own copy, a torch change from a shake, from the
-     * notification or from another app would leave it showing a light that is
-     * not on.
-     *
-     * Idempotent, because a `StateFlow` hands its current value to every new
-     * collector: an activity recreated while the torch is on must not count a
-     * second activation.
-     */
+    fun setSensitivity(value: Int) { sensitivityValue = value.coerceIn(Sensitivity.MIN, Sensitivity.MAX) }
     fun onTorchStateChanged(enabled: Boolean) {
         if (torchOn == enabled) return
         torchOn = enabled
         if (enabled) activations++
     }
-
-    /** A shake was recognised by the hardware. Animation only — see [detectedShake]. */
-    fun onShakeDetected() {
-        detectedShake++
-    }
-
-    fun simulateShake() {
-        shakeRequest++
-    }
-
-    fun openSettings() {
-        screen = Screen.SETTINGS
-    }
-
-    fun closeSettings() {
-        screen = Screen.HOME
-    }
-
-    /** `◐` flips to the opposite explicit mode, exactly like the prototype's theme button. */
-    fun toggleTheme(isDarkNow: Boolean) {
-        themeMode = if (isDarkNow) ThemeMode.Light else ThemeMode.Dark
-    }
-
-    fun snapshot(): ShakeItSnapshot = ShakeItSnapshot(
-        sensitivity = sensitivity,
-        gesture = gesture,
-        detectionActive = detectionActive,
-        autoOffAfterFiveMinutes = autoOffAfterFiveMinutes,
-        startAfterReboot = startAfterReboot,
-        runInBackground = runInBackground,
-        themeMode = themeMode,
-        dynamicColor = dynamicColor,
-        activations = activations,
-    )
-
-    /** The two destinations from the prototype (`#home` and `#settings`). */
+    fun onShakeDetected() { detectedShake++ }
+    fun simulateShake() { shakeRequest++ }
+    fun openSettings() { screen = Screen.SETTINGS }
+    fun closeSettings() { screen = Screen.HOME }
+    fun toggleTheme(isDarkNow: Boolean) { themeMode = if (isDarkNow) ThemeMode.Light else ThemeMode.Dark }
+    fun snapshot() = ShakeItSnapshot(sensitivity, gesture, detectionActive, autoOffAfterFiveMinutes, startAfterReboot, runInBackground, themeMode, dynamicColor, activations)
     enum class Screen { HOME, SETTINGS }
 }
 
-/**
- * Creates the app state, restoring it from [ShakeItStore] and writing back on
- * every change.
- */
 @Composable
 fun rememberShakeItState(): ShakeItState {
     val context = LocalContext.current
     val store = remember(context) { ShakeItStore(context) }
     val state = remember(store) { ShakeItState(store.read(DefaultShakeItSnapshot)) }
-
     val snapshot = state.snapshot()
     LaunchedEffect(snapshot) { store.write(snapshot) }
-
     return state
 }

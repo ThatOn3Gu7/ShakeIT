@@ -44,8 +44,7 @@ class ShakeItStateTest {
     @Test
     fun `segmented control labels match the prototype`() {
         assertEquals("Shake", ShakeGesture.Shake.label)
-        assertEquals("Double-shake", ShakeGesture.DoubleShake.label)
-        assertEquals("Flip & shake", ShakeGesture.FlipAndShake.label)
+        assertEquals("Double Shake", ShakeGesture.DoubleShake.label)
         assertEquals("Light", ThemeMode.Light.label)
         assertEquals("Dark", ThemeMode.Dark.label)
         assertEquals("System", ThemeMode.System.label)
@@ -159,14 +158,14 @@ class ShakeItStateTest {
     fun `settings are writable and independent of each other`() {
         val state = newState()
 
-        state.gesture = ShakeGesture.FlipAndShake
+        state.gesture = ShakeGesture.DoubleShake
         state.detectionActive = false
         state.autoOffAfterFiveMinutes = true
         state.startAfterReboot = false
         state.runInBackground = false
         state.dynamicColor = false
 
-        assertEquals(ShakeGesture.FlipAndShake, state.gesture)
+        assertEquals(ShakeGesture.DoubleShake, state.gesture)
         assertFalse(state.detectionActive)
         assertTrue(state.autoOffAfterFiveMinutes)
         assertFalse(state.startAfterReboot)

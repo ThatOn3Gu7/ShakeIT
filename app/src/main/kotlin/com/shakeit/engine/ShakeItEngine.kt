@@ -27,6 +27,8 @@ import com.shakeit.hardware.detectionStatus
 import com.shakeit.hardware.recoveryDelayMillis
 import com.shakeit.service.ShakeItService
 import com.shakeit.state.DefaultShakeItSnapshot
+import com.shakeit.state.DoubleShakeGate
+import com.shakeit.state.ShakeGesture
 import com.shakeit.state.ShakeItSnapshot
 import com.shakeit.state.ShakeItStore
 import kotlinx.coroutines.CoroutineScope
@@ -143,6 +145,10 @@ class ShakeItEngine(private val context: Context) {
     private var watchdog: Job? = null
     private var autoOffJob: Job? = null
 
+    /** The pending pair is engine-owned so service restarts and UI changes can reset it. */
+    private val doubleShakeGate = DoubleShakeGate()
+    private var doubleShakeTimeoutJob: Job? = null
+
     /** How many rebuilds the current stall has consumed. */
     private var recoveryAttempts = 0
     private var lastRecoveryAtElapsed = 0L
@@ -220,6 +226,7 @@ class ShakeItEngine(private val context: Context) {
             publishStatus()
             return
         }
+        resetDoubleShake()
         if (!current.start()) {
             Log.w(TAG, "detection did not arm; diagnostics will say why")
         }
@@ -232,6 +239,7 @@ class ShakeItEngine(private val context: Context) {
      */
     fun stopDetection() {
         detector?.stop()
+        resetDoubleShake()
         _covered.value = false
         resetRecovery()
         publishStatus()
@@ -368,6 +376,8 @@ class ShakeItEngine(private val context: Context) {
                 Log.i(TAG, "sensitivity preference -> $sensitivity")
             }
 
+            ShakeItStore.KEY_GESTURE -> resetDoubleShake()
+
             ShakeItStore.KEY_DETECTION_ACTIVE, ShakeItStore.KEY_RUN_IN_BACKGROUND ->
                 applyPreferences(fromUserAction = true)
 
@@ -486,6 +496,7 @@ class ShakeItEngine(private val context: Context) {
 
         recoveryAttempts++
         lastRecoveryAtElapsed = now
+        resetDoubleShake()
         val registered = current.recover()
         Log.w(
             TAG,
@@ -735,10 +746,41 @@ class ShakeItEngine(private val context: Context) {
         false
     }
 
-    /** A shake got through: count it for the UI, then act on it. */
+    /**
+     * A valid, debounced shake got through the sensor pipeline. Normal Shake is
+     * intentionally unchanged. Double Shake adds only a small gate in front of
+     * the same toggle path, so sensitivity and hardware reliability stay owned by
+     * ShakeDetector exactly as before.
+     */
     private fun onShakeDetected() {
+        when (preferences.gesture) {
+            ShakeGesture.Shake -> completeShakeAction()
+            ShakeGesture.DoubleShake -> {
+                val completed = doubleShakeGate.accept(SystemClock.elapsedRealtime())
+                if (completed) {
+                    doubleShakeTimeoutJob?.cancel()
+                    doubleShakeTimeoutJob = null
+                    completeShakeAction()
+                } else {
+                    doubleShakeTimeoutJob?.cancel()
+                    doubleShakeTimeoutJob = scope.launch {
+                        delay(DoubleShakeGate.DEFAULT_TIMEOUT_MILLIS)
+                        doubleShakeGate.reset()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun completeShakeAction() {
         _shakeEvents.update { it + 1 }
         toggleTorch()
+    }
+
+    private fun resetDoubleShake() {
+        doubleShakeTimeoutJob?.cancel()
+        doubleShakeTimeoutJob = null
+        doubleShakeGate.reset()
     }
 
     private companion object {
