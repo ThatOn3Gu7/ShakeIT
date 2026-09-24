@@ -4,13 +4,10 @@ import android.app.Application
 import com.shakeit.engine.ShakeItEngine
 
 /**
- * Owns the [ShakeItEngine] for the whole process.
- *
- * Hardware access has to outlive any one screen: the service keeps detecting
- * shakes after the activity is destroyed, and the activity has to see torch
- * changes that happened while it was gone. Creating the engine here, once, is
- * what lets both sides read the same state instead of each keeping their own
- * idea of whether the light is on.
+ * Owns the [ShakeItEngine] for the current process. The foreground service is
+ * isolated in `:sensor`, so its engine is the authoritative detector owner;
+ * the UI process observes hardware state and sends explicit preference commands
+ * rather than relying on shared in-memory state.
  */
 class ShakeItApplication : Application() {
 

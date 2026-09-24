@@ -81,6 +81,7 @@
         -->
         <service
             android:name=".service.ShakeItService"
+            android:process=":sensor"
             android:exported="false"
             android:foregroundServiceType="specialUse"
             android:stopWithTask="false">
