@@ -220,6 +220,7 @@ class ShakeItEngine(private val context: Context) {
             onHardwareWake = ::onHardwareWake,
         ).also { created ->
             detector = created
+            created.setGesture(preferences.gesture)
             created.setSensitivity(preferences.sensitivity)
         }
         if (current.isRunning) {
@@ -376,7 +377,10 @@ class ShakeItEngine(private val context: Context) {
                 Log.i(TAG, "sensitivity preference -> $sensitivity")
             }
 
-            ShakeItStore.KEY_GESTURE -> resetDoubleShake()
+            ShakeItStore.KEY_GESTURE -> {
+                detector?.setGesture(preferences.gesture)
+                resetDoubleShake()
+            }
 
             ShakeItStore.KEY_DETECTION_ACTIVE, ShakeItStore.KEY_RUN_IN_BACKGROUND ->
                 applyPreferences(fromUserAction = true)

@@ -78,15 +78,23 @@ const val SENSITIVITY_DEFAULT = 3
  *
  * Pure, so the whole ladder is testable on the JVM.
  */
-fun shakeConfigFor(sensitivity: Int): ShakeConfig {
+fun shakeConfigFor(sensitivity: Int, doubleShake: Boolean = false): ShakeConfig {
     val level = sensitivity.coerceIn(SENSITIVITY_MIN, SENSITIVITY_MAX)
     val threshold = DefaultShakeConfig.impulseThreshold +
         (SENSITIVITY_DEFAULT - level) * SENSITIVITY_STEP
-    return DefaultShakeConfig.copy(impulseThreshold = threshold)
+    return DefaultShakeConfig.copy(
+        impulseThreshold = threshold,
+        quietMillis = if (doubleShake) DOUBLE_SHAKE_QUIET_MILLIS else DefaultShakeConfig.quietMillis,
+        cooldownMillis = if (doubleShake) DOUBLE_SHAKE_COOLDOWN_MILLIS else DefaultShakeConfig.cooldownMillis,
+    )
 }
 
 /** How much harder (or easier) each step of the slider makes a stroke, in m/s². */
 private const val SENSITIVITY_STEP = 2.5f
+
+/** The shorter re-arm window lets a Double Shake feel like one natural gesture. */
+private const val DOUBLE_SHAKE_QUIET_MILLIS = 180L
+private const val DOUBLE_SHAKE_COOLDOWN_MILLIS = 180L
 
 /**
  * Decides whether a stream of accelerometer samples is a deliberate shake.

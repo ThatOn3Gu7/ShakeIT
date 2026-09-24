@@ -235,6 +235,25 @@ class ShakeItStateTest {
     }
 
     @Test
+    fun `double shake gate accepts a natural pair and clears after success`() {
+        val gate = DoubleShakeGate(timeoutMillis = 1_000L)
+
+        assertFalse(gate.accept(10_000L))
+        assertTrue(gate.isWaiting())
+        assertTrue(gate.accept(10_420L))
+        assertFalse(gate.isWaiting())
+    }
+
+    @Test
+    fun `double shake gate expires an abandoned first shake without toggling`() {
+        val gate = DoubleShakeGate(timeoutMillis = 1_000L)
+
+        assertFalse(gate.accept(10_000L))
+        assertFalse(gate.accept(11_001L))
+        assertTrue(gate.isWaiting())
+    }
+
+    @Test
     fun `nothing about a Shizuku connection is stored`() {
         // It used to be a boolean in the snapshot that a stub flipped, which made
         // "connected" survive a restart of an app that had never talked to
