@@ -270,7 +270,7 @@ private fun HomeHero(
 }
 
 /** A render-thread scale helper to keep the hero's measured size stable. */
-private fun Modifier.graphicsScale(scale: Float): Modifier = androidx.compose.ui.graphics.graphicsLayer {
+private fun Modifier.graphicsScale(scale: Float): Modifier = graphicsLayer {
     scaleX = scale
     scaleY = scale
 }
