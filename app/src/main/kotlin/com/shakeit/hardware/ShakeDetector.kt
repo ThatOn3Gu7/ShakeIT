@@ -18,6 +18,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
+import com.shakeit.state.ShakeGesture
 
 /**
  * Wires the accelerometer and the proximity sensor to [ShakeAlgorithm], keeps
@@ -71,6 +72,12 @@ class ShakeDetector(
     private val powerManager: PowerManager? = appContext.getSystemService()
 
     /** Replaced wholesale on a sensitivity change; volatile because the sensor thread reads it. */
+    @Volatile
+    private var doubleShakeMode = false
+
+    @Volatile
+    private var sensitivity = SENSITIVITY_DEFAULT
+
     @Volatile
     private var algorithm = ShakeAlgorithm()
 
@@ -216,11 +223,34 @@ class ShakeDetector(
      * world rather than about the tuning.
      */
     fun setSensitivity(sensitivity: Int) {
-        val config = shakeConfigFor(sensitivity)
+        this.sensitivity = sensitivity.coerceIn(SENSITIVITY_MIN, SENSITIVITY_MAX)
+        rebuildAlgorithm(this.sensitivity)
+        Log.i(TAG, "sensitivity ${this.sensitivity} -> impulseThreshold ${algorithmConfig().impulseThreshold}")
+    }
+
+    /**
+     * Double Shake needs a shorter detector re-arm interval, while normal Shake
+     * retains its existing duplicate protection. The burst and reversal rules
+     * remain identical in both modes, so a continuous shake still cannot become
+     * two events.
+     */
+    fun setGesture(gesture: ShakeGesture) {
+        val nextDoubleShake = gesture == ShakeGesture.DoubleShake
+        if (doubleShakeMode == nextDoubleShake) return
+        doubleShakeMode = nextDoubleShake
+        rebuildAlgorithm(sensitivity)
+    }
+
+    private fun rebuildAlgorithm(sensitivity: Int) {
+        val config = shakeConfigFor(sensitivity, doubleShake = doubleShakeMode)
         val wasCovered = algorithm.covered
         algorithm = ShakeAlgorithm(config).also { it.covered = wasCovered }
-        Log.i(TAG, "sensitivity $sensitivity -> impulseThreshold ${config.impulseThreshold}")
     }
+
+    private fun algorithmConfig(): ShakeConfig = shakeConfigFor(
+        sensitivity,
+        doubleShake = doubleShakeMode,
+    )
 
     /**
      * How long it has been since a sample arrived, measured on the clock that

@@ -62,7 +62,7 @@ class DoubleShakeGate(
 
     companion object {
         /** Tunable middle of the requested roughly one-to-two-second window. */
-        const val DEFAULT_TIMEOUT_MILLIS = 1_500L
+        const val DEFAULT_TIMEOUT_MILLIS = 1_000L
     }
 }
 
