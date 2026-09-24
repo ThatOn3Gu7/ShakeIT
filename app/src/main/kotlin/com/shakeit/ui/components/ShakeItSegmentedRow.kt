@@ -1,5 +1,9 @@
 package com.shakeit.ui.components
 
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.horizontalDrag
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -8,25 +12,23 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
+import kotlin.math.floor
 
 /**
  * A single-choice row: gesture, theme — anywhere the options are few, mutually
  * exclusive and all worth showing at once.
  *
- * Material's own segmented button, which the hand-drawn version it replaces was
- * missing three things: a ripple on the option being pressed, `Role.RadioButton`
- * semantics with the selection announced, and keyboard/switch-access focus. It
- * also animates the selected option's indicator itself, so the row no longer
- * cross-fades two background colours by hand on a fixed tween.
- *
- * @param options every choice, all of them visible — a segmented row that hides
- *   an option behind a menu is not a segmented row
- * @param labelOf the words for one option. Kept short by the caller: the row
- *   divides the width equally, so a long label ellipsises rather than wrapping
- * @param enabledFor lets one option be inert without hiding it, which is how a
- *   choice that exists in the design but not in the engine should be shown
+ * The Material segmented buttons remain the visual and accessibility surface. The
+ * row additionally owns a horizontal gesture recogniser which waits for
+ * horizontal touch-slop before consuming anything. That distinction matters in
+ * a vertically scrolling Settings page: a vertical finger movement is left to
+ * the parent scroll container, while a deliberate horizontal movement becomes
+ * a physical tile sliding across the existing slots.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,24 +40,58 @@ fun <T> ShakeItSegmentedRow(
     modifier: Modifier = Modifier,
     enabledFor: (T) -> Boolean = { true },
 ) {
-    val colors = MaterialTheme.colorScheme
+    val currentSelection by rememberUpdatedState(onSelect)
+    val currentEnabled by rememberUpdatedState(enabledFor)
 
-    SingleChoiceSegmentedButtonRow(modifier = modifier.fillMaxWidth()) {
+    SingleChoiceSegmentedButtonRow(
+        modifier = modifier
+            .fillMaxWidth()
+            .pointerInput(options) {
+                if (options.isEmpty()) return@pointerInput
+
+                fun selectAt(x: Float) {
+                    val slotWidth = size.width / options.size.toFloat()
+                    if (slotWidth <= 0f) return
+                    val index = floor((x / slotWidth))
+                        .toInt()
+                        .coerceIn(options.indices)
+                    val option = options[index]
+                    if (currentEnabled(option)) currentSelection(option)
+                }
+
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val horizontal = awaitHorizontalTouchSlopOrCancellation(down.id) { change, _ ->
+                        // Consume only after the gesture has proved horizontal.
+                        // Before this point, a vertical Settings scroll remains
+                        // completely owned by the parent.
+                        change.consume()
+                        selectAt(change.position.x)
+                    }
+                    if (horizontal != null) {
+                        horizontalDrag(horizontal.id) { change ->
+                            change.consume()
+                            selectAt(change.position.x)
+                        }
+                    }
+                }
+            },
+    ) {
         options.forEachIndexed { index, option ->
             SegmentedButton(
                 selected = option == selected,
-                onClick = { onSelect(option) },
+                onClick = { if (currentEnabled(option)) currentSelection(option) },
                 shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
-                enabled = enabledFor(option),
+                enabled = currentEnabled(option),
                 modifier = Modifier.weight(1f),
                 colors = SegmentedButtonDefaults.colors(
-                    activeContainerColor = colors.primaryContainer,
-                    activeContentColor = colors.onPrimaryContainer,
-                    inactiveContainerColor = colors.surfaceContainerHigh,
-                    inactiveContentColor = colors.onSurfaceVariant,
+                    activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    inactiveContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    inactiveContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
-                // No checkmark: the container colour already carries the selection,
-                // and an icon slot in a three-option row costs label width.
+                // No checkmark: the current visual language uses the selected
+                // container itself as the indicator, so the rail stays unchanged.
                 icon = {},
             ) {
                 Text(
