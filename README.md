@@ -709,3 +709,28 @@ every component reads the brand purple and amber from `ShakeItColors`, which is
 what keeps the UI matching the design reference. The prototype's switch has no
 visual effect either. Widening it to re-tint the brand palette is a one-line
 change in `ui/theme/Theme.kt` if that is ever wanted.
+
+## Development APK signing
+
+Debug builds use the Android debug certificate unless the shared development
+signing variables are supplied. To make a local APK replace an APK from CI,
+configure the same out-of-band keystore and credentials on the workstation:
+
+```sh
+export SHAKEIT_DEV_KEYSTORE=/secure/path/shakeit-development.keystore
+export SHAKEIT_DEV_STORE_PASSWORD='...'
+export SHAKEIT_DEV_KEY_ALIAS='...'
+export SHAKEIT_DEV_KEY_PASSWORD='...'
+./gradlew :app:assembleDebug
+```
+
+CI reads the equivalent repository secrets
+`SHAKEIT_DEV_KEYSTORE_BASE64`, `SHAKEIT_DEV_STORE_PASSWORD`,
+`SHAKEIT_DEV_KEY_ALIAS`, and `SHAKEIT_DEV_KEY_PASSWORD`. The keystore itself is
+never committed. Configure those secrets once from the same development
+keystore used locally; every subsequent debug APK then has the same signing
+certificate and can update the previous test install while preserving app data.
+
+If the secrets are not configured, CI deliberately warns and uses the ordinary
+runner-generated debug key. That fallback is suitable only for builds that are
+not installed over a local or previous CI APK.

@@ -54,6 +54,24 @@ runs:
         echo '--- gradle.properties as CI sees it ---'
         cat gradle.properties
 
+    - name: Configure the shared development signing key
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -z "${SHAKEIT_DEV_KEYSTORE_BASE64:-}" ]; then
+          echo '::warning::Shared development signing secrets are not configured; debug APKs use the runner-generated debug key.'
+          exit 0
+        fi
+        keyfile="$RUNNER_TEMP/shakeit-development.keystore"
+        printf '%s' "$SHAKEIT_DEV_KEYSTORE_BASE64" | base64 --decode > "$keyfile"
+        {
+          echo "SHAKEIT_DEV_KEYSTORE=$keyfile"
+          echo "SHAKEIT_DEV_STORE_PASSWORD=$SHAKEIT_DEV_STORE_PASSWORD"
+          echo "SHAKEIT_DEV_KEY_ALIAS=$SHAKEIT_DEV_KEY_ALIAS"
+          echo "SHAKEIT_DEV_KEY_PASSWORD=$SHAKEIT_DEV_KEY_PASSWORD"
+        } >> "$GITHUB_ENV"
+        echo 'Using the repository-provided shared development certificate for debug APKs.'
+
     - name: Print the toolchain
       shell: bash
       run: |
