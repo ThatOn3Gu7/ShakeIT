@@ -182,6 +182,9 @@ class ShakeItEngine(private val context: Context) {
             )
             if (intent.getBooleanExtra(SensorProcessContract.EXTRA_SENSOR_DIAGNOSTICS, false)) {
                 authoritativeSensorDiagnostics = SensorDiagnostics(
+                    accelerometerName = intent.getStringExtra(SensorProcessContract.EXTRA_ACCELEROMETER_NAME),
+                    accelerometerType = intent.getIntExtra(SensorProcessContract.EXTRA_ACCELEROMETER_TYPE, 0),
+                    accelerometerReportingMode = intent.getIntExtra(SensorProcessContract.EXTRA_ACCELEROMETER_REPORTING_MODE, 0),
                     accelerometerAvailable = intent.getBooleanExtra(SensorProcessContract.EXTRA_ACCELEROMETER_AVAILABLE, false),
                     accelerometerWakeUp = intent.getBooleanExtra(SensorProcessContract.EXTRA_ACCELEROMETER_WAKE_UP, false),
                     registrationSucceeded = intent.getBooleanExtra(SensorProcessContract.EXTRA_REGISTRATION_SUCCEEDED, false),
@@ -704,6 +707,9 @@ class ShakeItEngine(private val context: Context) {
                     ).also { intent ->
                         val sensor = detector?.diagnostics() ?: SensorDiagnostics()
                         intent.putExtra(SensorProcessContract.EXTRA_SENSOR_DIAGNOSTICS, true)
+                            .putExtra(SensorProcessContract.EXTRA_ACCELEROMETER_NAME, sensor.accelerometerName)
+                            .putExtra(SensorProcessContract.EXTRA_ACCELEROMETER_TYPE, sensor.accelerometerType)
+                            .putExtra(SensorProcessContract.EXTRA_ACCELEROMETER_REPORTING_MODE, sensor.accelerometerReportingMode)
                             .putExtra(SensorProcessContract.EXTRA_ACCELEROMETER_AVAILABLE, sensor.accelerometerAvailable)
                             .putExtra(SensorProcessContract.EXTRA_ACCELEROMETER_WAKE_UP, sensor.accelerometerWakeUp)
                             .putExtra(SensorProcessContract.EXTRA_REGISTRATION_SUCCEEDED, sensor.registrationSucceeded)

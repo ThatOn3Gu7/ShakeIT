@@ -269,6 +269,9 @@ class ShakeDetector(
     fun diagnostics(): SensorDiagnostics {
         val screenIsOn = powerManager?.isInteractive ?: true
         return SensorDiagnostics(
+            accelerometerName = accelerometer?.name,
+            accelerometerType = accelerometer?.type ?: 0,
+            accelerometerReportingMode = accelerometer?.reportingMode ?: 0,
             accelerometerAvailable = accelerometer != null,
             accelerometerWakeUp = accelerometer?.isWakeUpSensor == true,
             proximityAvailable = proximitySensor != null,
@@ -361,8 +364,11 @@ class ShakeDetector(
 
         Log.i(
             TAG,
-            "detection armed: sensor=${sensor.name}, allSensorsWakeUp=$usesWakeUpSensor, " +
-                "proximity=$proximityRegistered, significantMotion=$triggerArmed, " +
+                "detection armed: sensor=${sensor.name}, type=${sensor.type}, " +
+                "reportingMode=${sensor.reportingMode}, wakeUp=${sensor.isWakeUpSensor}, " +
+                "allSensorsWakeUp=$usesWakeUpSensor, proximity=$proximityRegistered, " +
+                "significantMotion=${significantMotionSensor?.name}:${significantMotionSensor != null}, " +
+                "significantMotionArmed=$triggerArmed, " +
                 "wakeLock=${wakeLock?.isHeld == true}",
         )
         return true

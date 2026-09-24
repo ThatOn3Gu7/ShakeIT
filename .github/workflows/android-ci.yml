@@ -169,6 +169,14 @@ jobs:
           ./gradlew $GRADLE_ARGS :app:assembleDebug 2>&1 | tee "$GRADLE_LOG"
           exit "${PIPESTATUS[0]}"
 
+      - name: Print debug APK signer
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          apksigner=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk
+
       - name: Upload the build log
         if: always()
         uses: actions/upload-artifact@v4
