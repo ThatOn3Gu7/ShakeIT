@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shakeit.R
 import com.shakeit.hardware.DetectionStatus
+import com.shakeit.state.ShakeGesture
 import com.shakeit.ui.components.DetectionStatusChip
 import com.shakeit.ui.components.ShakeItIconButton
 import com.shakeit.ui.components.ShakeItScreen
@@ -83,6 +84,7 @@ fun HomeScreen(
     torchOn: Boolean,
     activations: Int,
     detectionStatus: DetectionStatus,
+    gesture: ShakeGesture,
     detectedShake: Int,
     animateBlob: Boolean,
     onToggleTorch: () -> Unit,
@@ -117,6 +119,7 @@ fun HomeScreen(
             Spacer(Modifier.height(metrics.sectionGap))
 
             ShakeInstructionCard(
+                gesture = gesture,
                 modifier = Modifier.fillMaxWidth(),
             )
 
@@ -231,7 +234,14 @@ private fun HomeHero(
                         maxLines = 1,
                     )
                     Text(
-                        text = stringResource(if (on) R.string.home_light_is_on else R.string.home_light_is_off),
+                        text = stringResource(
+                            when {
+                                gesture == ShakeGesture.DoubleShake && on -> R.string.home_light_is_on_double
+                                gesture == ShakeGesture.DoubleShake -> R.string.home_light_is_off_double
+                                on -> R.string.home_light_is_on
+                                else -> R.string.home_light_is_off
+                            },
+                        ),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -374,9 +384,27 @@ private fun Hero(
  * thing that does it.
  */
 @Composable
-private fun ShakeInstructionCard(modifier: Modifier = Modifier) {
+private fun ShakeInstructionCard(
+    gesture: ShakeGesture,
+    modifier: Modifier = Modifier,
+) {
     val colors = MaterialTheme.colorScheme
-    val instructionDescription = stringResource(R.string.shake_instruction_accessibility)
+    val titleRes = if (gesture == ShakeGesture.DoubleShake) {
+        R.string.double_shake_instruction_title
+    } else {
+        R.string.shake_instruction_title
+    }
+    val bodyRes = if (gesture == ShakeGesture.DoubleShake) {
+        R.string.double_shake_instruction_body
+    } else {
+        R.string.shake_instruction_body
+    }
+    val accessibilityRes = if (gesture == ShakeGesture.DoubleShake) {
+        R.string.double_shake_instruction_accessibility
+    } else {
+        R.string.shake_instruction_accessibility
+    }
+    val instructionDescription = stringResource(accessibilityRes)
     Surface(
         modifier = modifier
             .clearAndSetSemantics {
@@ -403,11 +431,11 @@ private fun ShakeInstructionCard(modifier: Modifier = Modifier) {
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = stringResource(R.string.shake_instruction_title),
+                    text = stringResource(titleRes),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
-                    text = stringResource(R.string.shake_instruction_body),
+                    text = stringResource(bodyRes),
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.onSurfaceVariant,
                 )

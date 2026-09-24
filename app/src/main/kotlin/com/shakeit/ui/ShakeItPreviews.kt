@@ -11,6 +11,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.shakeit.hardware.DetectionStatus
 import com.shakeit.state.DefaultShakeItSnapshot
 import com.shakeit.state.ShakeItState
+import com.shakeit.state.ShakeGesture
 import com.shakeit.ui.home.HomeScreen
 import com.shakeit.ui.settings.SettingsScreen
 import com.shakeit.ui.theme.ShakeItTheme
@@ -91,6 +92,7 @@ private fun HomeScreenPreview(torchOn: Boolean) {
         torchOn = torchOn,
         activations = DefaultShakeItSnapshot.activations,
         detectionStatus = DetectionStatus.ACTIVE,
+        gesture = ShakeGesture.Shake,
         detectedShake = 0,
         // Frozen in previews: the frame loop would otherwise keep the preview
         // redrawing indefinitely.

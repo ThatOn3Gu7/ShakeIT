@@ -1,7 +1,14 @@
 package com.shakeit.ui.settings
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -58,6 +65,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -70,6 +78,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.shakeit.R
 import com.shakeit.background.PowerManagerVendor
+import com.shakeit.hardware.Haptics
 import com.shakeit.background.RestrictionState
 import com.shakeit.background.ShizukuState
 import com.shakeit.background.ShizukuStatus
@@ -116,6 +125,11 @@ fun SettingsScreen(
     onRepairBackgroundAppOp: () -> Unit = {},
 ) {
     var diagnosticsOpen by remember { mutableStateOf(false) }
+    val haptics = remember { Haptics(LocalContext.current) }
+    val onSensitivityChange: (Int) -> Unit = { next ->
+        if (next != state.sensitivity) haptics.tick()
+        state.setSensitivity(next)
+    }
 
     ShakeItScreen(modifier = modifier) { metrics ->
         Column(modifier = Modifier.fillMaxSize()) {
@@ -153,11 +167,13 @@ fun SettingsScreen(
                     SettingsControlRow(
                         icon = Icons.Rounded.Tune,
                         title = stringResource(R.string.setting_sensitivity),
-                        subtitle = state.sensitivityLabel,
+                        subtitleContent = {
+                            SensitivityLabelTransition(level = state.sensitivity)
+                        },
                     ) {
                         SensitivitySteps(
                             value = state.sensitivity,
-                            onValueChange = state::setSensitivity,
+                            onValueChange = onSensitivityChange,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
@@ -174,13 +190,6 @@ fun SettingsScreen(
                             labelOf = { it.label },
                             onSelect = { state.gesture = it },
                         )
-                        if (state.gesture != ShakeGesture.Shake) {
-                            Text(
-                                text = stringResource(R.string.gesture_not_implemented),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                     }
                     SettingsDivider()
                     SettingsSwitchRow(
@@ -280,6 +289,25 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SensitivityLabelTransition(level: Int) {
+    AnimatedContent(
+        targetState = level,
+        transitionSpec = {
+            val direction = if (targetState > initialState) 1 else -1
+            (slideInHorizontally(tween(160)) { it * direction } + fadeIn(tween(120))) togetherWith
+                (slideOutHorizontally(tween(160)) { -it * direction } + fadeOut(tween(100)))
+        },
+        label = "sensitivityLabel",
+    ) { target ->
+        Text(
+            text = Sensitivity.label(target),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
