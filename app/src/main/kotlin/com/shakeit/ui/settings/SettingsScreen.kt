@@ -5,6 +5,10 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -38,7 +42,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -144,17 +148,10 @@ fun SettingsScreen(
                         title = stringResource(R.string.setting_sensitivity),
                         subtitle = state.sensitivityLabel,
                     ) {
-                        Slider(
-                            value = state.sensitivity.toFloat(),
-                            onValueChange = { state.setSensitivity(it.toInt()) },
-                            valueRange = Sensitivity.MIN.toFloat()..Sensitivity.MAX.toFloat(),
-                            steps = Sensitivity.MAX - Sensitivity.MIN - 1,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .semantics {
-                                    role = Role.Slider
-                                    stateDescription = state.sensitivityLabel
-                                },
+                        SensitivitySteps(
+                            value = state.sensitivity,
+                            onValueChange = state::setSensitivity,
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                     SettingsDivider()
@@ -275,6 +272,43 @@ fun SettingsScreen(
                     onToggle = { diagnosticsOpen = !diagnosticsOpen },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SensitivitySteps(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier
+            .height(48.dp)
+            .semantics {
+                role = Role.Slider
+                stateDescription = Sensitivity.label(value)
+            },
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        (Sensitivity.MIN..Sensitivity.MAX).forEach { level ->
+            val selected = level <= value
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(if (level == value) 28.dp else 18.dp)
+                    .background(
+                        color = if (selected) colors.primary else colors.outlineVariant,
+                        shape = RoundedCornerShape(50),
+                    )
+                    .clickable(
+                        onClickLabel = Sensitivity.label(level),
+                        role = Role.Button,
+                        onClick = { onValueChange(level) },
+                    ),
+            )
         }
     }
 }
