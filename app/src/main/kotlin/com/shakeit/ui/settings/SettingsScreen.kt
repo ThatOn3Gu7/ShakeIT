@@ -32,7 +32,6 @@ import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.SettingsBackupRestore
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -51,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -412,7 +412,7 @@ private fun DiagnosticsPanel(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize(animationSpec = ShakeItMotion.Settle),
+            .animateContentSize(animationSpec = spring()),
         shape = ShakeItShapes.panel,
         color = colors.surfaceContainerHighest,
     ) {
@@ -447,7 +447,7 @@ private fun DiagnosticsPanel(
 }
 
 private fun Modifier.graphicsRotation(rotation: Float): Modifier =
-    androidx.compose.ui.graphics.graphicsLayer { rotationZ = rotation }
+    graphicsLayer { rotationZ = rotation }
 
 @Composable
 private fun DiagnosticsRows(diagnostics: DiagnosticsSnapshot) {

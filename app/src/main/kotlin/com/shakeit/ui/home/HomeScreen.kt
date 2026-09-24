@@ -10,9 +10,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.material.ripple.ripple
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -50,6 +47,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.onClick
@@ -191,13 +189,7 @@ private fun HomeHero(
     modifier: Modifier = Modifier,
 ) {
     val palette = torchColors()
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(
-        targetValue = if (pressed) ShakeItMotion.HERO_PRESS_SCALE else 1f,
-        animationSpec = ShakeItMotion.Snap,
-        label = "heroPressScale",
-    )
+    val pressScale = 1f
     val litScale by animateFloatAsState(
         targetValue = if (torchOn) ShakeItMotion.HERO_LIT_SCALE else 1f,
         animationSpec = ShakeItMotion.Settle,
@@ -207,6 +199,7 @@ private fun HomeHero(
         modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
+        val availableWidth = maxWidth
         val heroDiameter = minOf(maxWidth, maxHeight * 0.82f).coerceIn(176.dp, 320.dp)
 
         Column(
@@ -227,9 +220,9 @@ private fun HomeHero(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = stringResource(if (on) R.string.home_flashlight_active else R.string.home_flashlight_off),
-                        style = if (maxWidth < 340.dp) {
+                        style = if (availableWidth < 340.dp) {
                             MaterialTheme.typography.displaySmall
-                        } else if (maxWidth < 500.dp) {
+                        } else if (availableWidth < 500.dp) {
                             MaterialTheme.typography.displayMedium
                         } else {
                             MaterialTheme.typography.displayLarge
@@ -296,7 +289,6 @@ private fun Hero(
     modifier: Modifier = Modifier,
 ) {
     val palette = torchColors()
-    val interactionSource = remember { MutableInteractionSource() }
     val toggleLabel = stringResource(R.string.cd_toggle_torch)
     val activeState = stringResource(R.string.home_flashlight_active)
     val offState = stringResource(R.string.home_flashlight_off)
@@ -321,7 +313,6 @@ private fun Hero(
         wobble.snapTo(0f)
     }
 
-    val pressed by interactionSource.collectIsPressedAsState()
     val wobbleRotation = Wobble.rotationAt(wobble.value)
 
     Box(
@@ -335,8 +326,6 @@ private fun Hero(
                 translationY = offset * sin(radians)
             }
             .clickable(
-                interactionSource = interactionSource,
-                indication = ripple(),
                 onClickLabel = toggleLabel,
                 role = Role.Button,
                 onClick = currentToggle,
