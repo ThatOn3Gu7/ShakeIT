@@ -1,25 +1,27 @@
-name: CI
+name: Android CI
 
+# A run should say what changed, so its name is the subject line of the commit
+# that triggered it (see `run-name` below). That is also why this workflow is
+# triggered by `push` and not by `pull_request`: a `pull_request` payload carries
+# no commit message at all, which is how every run of a branch with one open pull
+# request ended up named after that pull request's title — identical, and
+# therefore useless for telling one build from the next.
+#
+# Nothing is lost by dropping the `pull_request` trigger:
+#   * the checks still appear on the pull request, because a check run is
+#     attached to the head commit and the push event builds exactly that commit;
+#   * the failure report still lands as a pull request comment, because
+#     .github/scripts/report_failures.py already resolves the pull request from
+#     the head branch when the event is not `pull_request`.
+# What is lost is CI for pull requests opened *from a fork*, whose pushes run in
+# the fork rather than here. If this project starts taking fork contributions,
+# re-add `pull_request` as a second trigger and accept the duplicated runs.
+#
 # Path filtering is deliberate: a push that only touches the README, the design
 # mockup or other documentation gets no runner time at all.
-#
-# Feature branches are covered by the `pull_request` trigger rather than `push`,
-# so a commit on a branch with an open pull request produces exactly one run and
-# one report comment instead of two racing ones.
 on:
   push:
-    branches: [master]
-    paths:
-      - 'app/**'
-      - 'gradle/**'
-      - 'gradle.properties'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - 'gradlew'
-      - 'gradlew.bat'
-      - '.github/**'
-  pull_request:
-    branches: [master]
+    branches: ['**']
     paths:
       - 'app/**'
       - 'gradle/**'
@@ -30,6 +32,17 @@ on:
       - 'gradlew.bat'
       - '.github/**'
   workflow_dispatch:
+
+# The commit's own subject line, so the Actions list reads as a history of what
+# changed instead of one repeated title.
+#
+# A message with a body will carry that body into the name as well: GitHub
+# expressions have no way to split a string, and there is no API for renaming a
+# run after it starts. The subject comes first, which is what the list shows.
+# `workflow_dispatch` has no commit at all, so it says which ref was dispatched.
+run-name: >-
+  ${{ github.event_name == 'push' && github.event.head_commit.message
+  || format('Manual run on {0}', github.ref_name) }}
 
 # A newer push to the same ref supersedes the run in flight.
 concurrency:

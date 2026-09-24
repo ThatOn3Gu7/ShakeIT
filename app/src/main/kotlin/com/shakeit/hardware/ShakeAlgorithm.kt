@@ -56,6 +56,38 @@ data class ShakeConfig(
 /** The tuning the detector ships with. */
 val DefaultShakeConfig = ShakeConfig()
 
+/** The Settings slider's range: `<input type="range" min="1" max="5">`. */
+const val SENSITIVITY_MIN = 1
+const val SENSITIVITY_MAX = 5
+
+/** The slider value the shipped tuning corresponds to ("Medium"). */
+const val SENSITIVITY_DEFAULT = 3
+
+/**
+ * Maps the sensitivity slider onto the recognition tuning.
+ *
+ * Only [ShakeConfig.impulseThreshold] moves: how hard a stroke has to be before
+ * it counts as an impulse. Everything that shapes *timing* — the impulse window,
+ * the reversal requirement, the quiet period and the cooldown — is left exactly
+ * as tuned and tested, because "one shake, one toggle" has to hold at every
+ * level. A slider that quietly rewrote the debounce would change what the gesture
+ * means rather than how hard it has to be.
+ *
+ * Level [SENSITIVITY_DEFAULT] reproduces [DefaultShakeConfig] precisely, so an
+ * untouched install behaves identically to before the slider was wired.
+ *
+ * Pure, so the whole ladder is testable on the JVM.
+ */
+fun shakeConfigFor(sensitivity: Int): ShakeConfig {
+    val level = sensitivity.coerceIn(SENSITIVITY_MIN, SENSITIVITY_MAX)
+    val threshold = DefaultShakeConfig.impulseThreshold +
+        (SENSITIVITY_DEFAULT - level) * SENSITIVITY_STEP
+    return DefaultShakeConfig.copy(impulseThreshold = threshold)
+}
+
+/** How much harder (or easier) each step of the slider makes a stroke, in m/s². */
+private const val SENSITIVITY_STEP = 2.5f
+
 /**
  * Decides whether a stream of accelerometer samples is a deliberate shake.
  *

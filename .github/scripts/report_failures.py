@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Turn a failed ShakeIT CI run into one pull-request comment.
 
-Every build job in ``.github/workflows/ci.yml`` tees its Gradle output into
+Every build job in ``.github/workflows/android-ci.yml`` tees its Gradle output into
 ``build.log`` and uploads it as an artifact. This script reads those logs, keeps
 the parts a developer actually needs -- Kotlin compiler errors, resource errors,
 lint errors, failing test names with their assertion messages, and Gradle's own

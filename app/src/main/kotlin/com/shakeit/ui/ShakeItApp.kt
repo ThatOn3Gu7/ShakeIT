@@ -40,10 +40,17 @@ private val BackgroundEasing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
  * [ShakeItNavHost] instead of a NavHost — which also keeps both screens
  * transparent over one shared background, exactly like `.screen-clip`.
  */
+/**
+ * @param openSettingsOnLaunch land on Settings instead of the home screen. Used by
+ *   the notification's Diagnostics action, which is offered only while something
+ *   is actually wrong — sending the user to the home screen first would hide the
+ *   answer behind a tap they did not ask for.
+ */
 @Composable
 fun ShakeItApp(
     state: ShakeItState = rememberShakeItState(),
     engine: ShakeItEngine = rememberShakeItEngine(),
+    openSettingsOnLaunch: Boolean = false,
 ) {
     // One-way mirror: hardware state flows into the screen state and never back,
     // so a shake with the screen locked, a tap here, or another app taking the
@@ -64,11 +71,16 @@ fun ShakeItApp(
     }
 
     // Detection health comes from the engine rather than from a stored
-    // preference, because this is the row that has to keep telling the truth when
-    // the device stops delivering samples in the background. Same for the battery
-    // answer, which is re-read on resume and can only change while we are away.
+    // preference, because these rows have to keep telling the truth when the
+    // device stops delivering samples in the background. Same for the diagnostics:
+    // they are re-read whenever the app resumes, which is the only moment the app
+    // gets to look at what happened while it was away.
     val detectionStatus by engine.detectionStatus.collectAsState()
-    val batteryUnrestricted by engine.batteryUnrestricted.collectAsState()
+    val diagnostics by engine.diagnostics.collectAsState()
+
+    LaunchedEffect(openSettingsOnLaunch) {
+        if (openSettingsOnLaunch) state.openSettings()
+    }
 
     val isDark = when (state.themeMode) {
         ThemeMode.System -> isSystemInDarkTheme()
@@ -116,9 +128,13 @@ fun ShakeItApp(
                     SettingsScreen(
                         state = state,
                         onBack = state::closeSettings,
-                        batteryUnrestricted = batteryUnrestricted,
-                        vendor = engine.battery.vendor,
+                        diagnostics = diagnostics,
                         onOpenBatterySettings = { engine.openBatterySettings() },
+                        onOpenAppSettings = { engine.openAppSettings() },
+                        onOpenShizuku = { engine.openShizuku() },
+                        onRequestShizukuPermission = engine::requestShizukuPermission,
+                        onRepairDozeAllowlist = engine::repairDozeAllowlist,
+                        onRepairBackgroundAppOp = engine::repairBackgroundAppOp,
                     )
                 },
             )

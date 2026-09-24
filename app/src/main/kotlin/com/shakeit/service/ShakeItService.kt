@@ -24,9 +24,15 @@ import kotlinx.coroutines.launch
  *
  * It owns no logic of its own. All it does is promote itself to the foreground —
  * which is the only supported way to keep reading sensors on modern Android —
- * hand the accelerometer to [ShakeItEngine], and keep the notification in step
- * with the hardware. The engine, and therefore the torch state, lives in the
- * [ShakeItApplication] scope so the UI and this service can never disagree.
+ * tell the engine it is up, hand over the accelerometer, and keep the
+ * notification in step with the hardware. The engine, and therefore the torch
+ * state, lives in the [ShakeItApplication] scope so the UI and this service can
+ * never disagree.
+ *
+ * The order of those steps is not incidental. A service started with
+ * `startForegroundService` has only a few seconds to call `startForeground`, or
+ * the system throws and kills it; every millisecond spent before that call is
+ * borrowed from that budget. So the notification goes up first, sensors second.
  *
  * Declared `specialUse` because none of the platform's foreground service types
  * describe "listen to the accelerometer while the screen is off"; the subtype
@@ -48,11 +54,18 @@ class ShakeItService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Idempotent, and repeated on every start: if anything ever stopped the
-        // listener while the service lived on, the next start re-arms it rather
-        // than leaving a foreground notification over a dead sensor.
-        engine.startDetection()
+        // 1. Foreground, before anything else — see the class documentation.
+        engine.onServiceStarted()
         goForeground()
+
+        // 2. Then arm detection. Idempotent, and repeated on every start: if
+        // anything ever stopped the listener while the service lived on, the next
+        // start re-arms it rather than leaving a foreground notification over a
+        // dead sensor.
+        engine.startDetection()
+
+        // 3. Then keep the notification honest, which corrects the first line of
+        // text as soon as the detector reports what it managed to register.
         observeHardware()
 
         // A null intent means the system restarted the service after killing it
@@ -63,22 +76,27 @@ class ShakeItService : Service() {
     /**
      * The user swiped the task away from Recents.
      *
-     * Nothing here stops the service: `stopWithTask` is false, and on stock
-     * Android a foreground service outlives its task, which is the behaviour the
-     * app is designed around — the activity is disposable, this is not. Some OEM
-     * power managers read a removed task as "shut the app down" regardless, so
-     * detection is re-armed (a no-op when it is already running) and the service
-     * is left alone rather than being torn down politely.
+     * Nothing here stops the service: `stopWithTask` is false and `onStartCommand`
+     * returns [START_STICKY], so on stock Android the foreground service outlives
+     * its task, which is the behaviour the app is designed around — the activity is
+     * disposable, this is not. What must not happen is treating the surviving
+     * listener as automatically healthy: some OEM power managers read a removed
+     * task as "freeze the package", which stops sample delivery while leaving
+     * everything looking started. So the task removal is handed to the engine as a
+     * recovery point rather than swallowed.
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        engine.startDetection()
+        if (::engine.isInitialized) engine.onTaskRemoved()
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
         scope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
-        if (::engine.isInitialized) engine.stopDetection()
+        if (::engine.isInitialized) {
+            engine.stopDetection()
+            engine.onServiceStopped()
+        }
         super.onDestroy()
     }
 

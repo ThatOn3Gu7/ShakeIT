@@ -36,7 +36,6 @@ class ShakeItStateTest {
         // follows the system until something is tapped.
         assertEquals(ThemeMode.System, state.themeMode)
         assertTrue(state.dynamicColor)
-        assertFalse(state.shizukuConnected)
         assertFalse(state.torchOn)
         assertEquals(7, state.activations)
         assertEquals(ShakeItState.Screen.HOME, state.screen)
@@ -195,16 +194,6 @@ class ShakeItStateTest {
         assertEquals(ThemeMode.Dark, state.themeMode)
     }
 
-    @Test
-    fun `the shizuku stub reports a connection it never really made`() {
-        val state = newState()
-        assertFalse(state.shizukuConnected)
-
-        state.connectShizuku()
-
-        assertTrue(state.shizukuConnected)
-    }
-
     // ------------------------------------------------------------------
     // Navigation + persistence boundary
     // ------------------------------------------------------------------
@@ -231,7 +220,6 @@ class ShakeItStateTest {
         state.runInBackground = false
         state.themeMode = ThemeMode.Dark
         state.dynamicColor = false
-        state.connectShizuku()
         state.onTorchStateChanged(true)
 
         val snapshot = state.snapshot()
@@ -245,7 +233,19 @@ class ShakeItStateTest {
         assertEquals("but what it did is still counted", 8, restored.activations)
         assertEquals(ShakeGesture.DoubleShake, restored.gesture)
         assertEquals(ThemeMode.Dark, restored.themeMode)
-        assertTrue(restored.shizukuConnected)
+    }
+
+    @Test
+    fun `nothing about a Shizuku connection is stored`() {
+        // It used to be a boolean in the snapshot that a stub flipped, which made
+        // "connected" survive a restart of an app that had never talked to
+        // Shizuku. The connection is read from Shizuku itself now — see
+        // com.shakeit.background.ShizukuController — so the snapshot has no such
+        // field, and the round trip above is the proof that every field it does
+        // have is a preference or a counter.
+        val fields = ShakeItSnapshot::class.java.declaredFields.map { it.name }
+
+        assertFalse(fields.toString(), fields.any { it.contains("shizuku", ignoreCase = true) })
     }
 
     @Test
