@@ -1,0 +1,161 @@
+name: ShakeIT Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+# Discovered from the repository's GitHub commit metadata and verified through
+# GitHub: Arena uses the account `arena-agent` (user id 297053741). The other
+# authorized actor is the repository owner. Keep this list explicit: repository
+# write permission alone must never authorize a release.
+env:
+  AUTHORIZED_RELEASE_ACTORS: 'ThatOn3Gu7 arena-agent'
+
+jobs:
+  authorize:
+    name: Authorize release actor
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject unauthorized release actor
+        env:
+          RELEASE_ACTOR: ${{ github.actor }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/tags/$GITHUB_REF_NAME" || {
+            echo '::error::This workflow only releases pushed tags.'
+            exit 1
+          }
+          case " $AUTHORIZED_RELEASE_ACTORS " in
+            *" $RELEASE_ACTOR "*)
+              echo "Authorized release actor: $RELEASE_ACTOR"
+              ;;
+            *)
+              echo "::error::Actor '$RELEASE_ACTOR' is not authorized to release ShakeIT."
+              exit 1
+              ;;
+          esac
+
+  release:
+    name: Build and publish release
+    needs: authorize
+    if: needs.authorize.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out the exact tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - uses: ./.github/actions/prepare-build
+
+      - name: Reconstruct release keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.SHAKEIT_RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.SHAKEIT_RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.SHAKEIT_RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.SHAKEIT_RELEASE_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_KEYSTORE_BASE64" || {
+            echo '::error::SHAKEIT_RELEASE_KEYSTORE_BASE64 is not configured.'
+            exit 1
+          }
+          test -n "$RELEASE_STORE_PASSWORD" || { echo '::error::Release store password is missing.'; exit 1; }
+          test -n "$RELEASE_KEY_ALIAS" || { echo '::error::Release key alias is missing.'; exit 1; }
+          test -n "$RELEASE_KEY_PASSWORD" || { echo '::error::Release key password is missing.'; exit 1; }
+          keyfile="$RUNNER_TEMP/shakeit-release.keystore"
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$keyfile"
+          chmod 600 "$keyfile"
+          {
+            echo "SHAKEIT_RELEASE_KEYSTORE=$keyfile"
+            echo "SHAKEIT_RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
+            echo "SHAKEIT_RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
+            echo "SHAKEIT_RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          # The tag is the release version; the monotonically increasing run
+          # number supplies Android's required numeric versionCode.
+          ./gradlew --console=plain --stacktrace \
+            -Prelease.versionName="$RELEASE_TAG" \
+            -Prelease.versionCode="$RELEASE_RUN_NUMBER" \
+            :app:assembleRelease
+
+      - name: Verify APK certificate matches the configured release keystore
+        shell: bash
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.SHAKEIT_RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.SHAKEIT_RELEASE_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/release/app-release.apk
+          apksigner=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -name apksigner -type f | sort -V | tail -1)
+          expected=$(keytool -list -v -keystore "$SHAKEIT_RELEASE_KEYSTORE" \
+            -storepass "$RELEASE_STORE_PASSWORD" -alias "$RELEASE_KEY_ALIAS" 2>/dev/null \
+            | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d ':' | tr '[:lower:]' '[:upper:]')
+          actual=$("$apksigner" verify --verbose --print-certs "$apk" \
+            | awk -F': ' '/certificate SHA-256 digest:/{print $2; exit}' \
+            | tr -d ':' | tr '[:lower:]' '[:upper:]')
+          test -n "$expected" && test -n "$actual" || {
+            echo '::error::Could not read the release certificate fingerprint.'
+            exit 1
+          }
+          echo "Release certificate SHA-256: $actual"
+          test "$expected" = "$actual" || {
+            echo '::error::APK signer does not match the configured release keystore.'
+            exit 1
+          }
+
+      - name: Generate release notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<EOF
+          ## ShakeIT $RELEASE_TAG
+
+          ShakeIT turns a deliberate phone shake into flashlight control.
+
+          ### Included functionality
+
+          - Normal **Shake** and **Double Shake** gesture modes.
+          - Adjustable shake sensitivity with direct discrete-level selection.
+          - Subtle haptic feedback when the flashlight changes state and when sensitivity changes.
+          - Material 3 adaptive interface with light, dark, and system theme modes.
+          - Foreground-service background detection with sensor registration diagnostics, recovery reporting, wake-up sensor selection, and wake-lock handling where required.
+          - Optional automatic flashlight shutoff after five minutes.
+          - Diagnostics for sensor delivery, registration, recovery attempts, power restrictions, and prior process exits.
+          - Optional Shizuku-assisted Doze and background-app-operation repairs when Shizuku is legitimately available.
+
+          Screen-off and OEM background behavior remains device-dependent. The app reports sensor and service state, but no Android application can guarantee continuous sensor delivery on every manufacturer's power-management implementation.
+          EOF
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="ShakeIT-${RELEASE_TAG}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$asset"
+          gh release create "$RELEASE_TAG" "$asset" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "ShakeIT $RELEASE_TAG" \
+            --notes-file release-notes.md
