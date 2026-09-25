@@ -104,12 +104,14 @@ jobs:
           set -euo pipefail
           apk=app/build/outputs/apk/release/app-release.apk
           apksigner=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -name apksigner -type f | sort -V | tail -1)
-          expected=$(keytool -list -v -keystore "$SHAKEIT_RELEASE_KEYSTORE" \
+          expected=$(keytool -exportcert -keystore "$SHAKEIT_RELEASE_KEYSTORE" \
             -storepass "$RELEASE_STORE_PASSWORD" -alias "$RELEASE_KEY_ALIAS" 2>/dev/null \
-            | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d ':' | tr '[:lower:]' '[:upper:]')
+            | openssl dgst -sha256 -binary | xxd -p -c 256 | tr -d '\\n' | tr '[:lower:]' '[:upper:]')
           actual=$("$apksigner" verify --verbose --print-certs "$apk" \
-            | awk -F': ' '/certificate SHA-256 digest:/{print $2; exit}' \
+            | sed -n 's/.*certificate SHA-256 digest: //p' | head -1 \
             | tr -d ':' | tr '[:lower:]' '[:upper:]')
+          echo "Configured keystore certificate SHA-256: $expected"
+          echo "APK certificate SHA-256: $actual"
           test -n "$expected" && test -n "$actual" || {
             echo '::error::Could not read the release certificate fingerprint.'
             exit 1
