@@ -734,3 +734,16 @@ certificate and can update the previous test install while preserving app data.
 If the secrets are not configured, CI deliberately warns and uses the ordinary
 runner-generated debug key. That fallback is suitable only for builds that are
 not installed over a local or previous CI APK.
+
+## Tagged releases
+
+Pushing a tag matching `v*` starts `.github/workflows/release.yml`. The workflow
+accepts only the repository owner `ThatOn3Gu7` or the verified Arena automation
+account `arena-agent`; all other tag pushes fail before the release build.
+
+Release signing uses the separate repository secrets
+`SHAKEIT_RELEASE_KEYSTORE_BASE64`, `SHAKEIT_RELEASE_STORE_PASSWORD`,
+`SHAKEIT_RELEASE_KEY_ALIAS`, and `SHAKEIT_RELEASE_KEY_PASSWORD`. The keystore is
+reconstructed only in the temporary runner, the release APK certificate is
+checked against that keystore with `apksigner`, and only then is the APK attached
+to the GitHub Release.

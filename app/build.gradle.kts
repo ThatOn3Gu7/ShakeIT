@@ -31,17 +31,46 @@ val hasDevelopmentSigning = !developmentKeystore.isNullOrBlank() &&
     !developmentKeyAlias.isNullOrBlank() &&
     !developmentKeyPassword.isNullOrBlank()
 
+val releaseKeystore = providers.gradleProperty("shakeit.release.keystore")
+    .orElse(providers.environmentVariable("SHAKEIT_RELEASE_KEYSTORE"))
+    .orNull
+val releaseStorePassword = providers.gradleProperty("shakeit.release.storePassword")
+    .orElse(providers.environmentVariable("SHAKEIT_RELEASE_STORE_PASSWORD"))
+    .orNull
+val releaseKeyAlias = providers.gradleProperty("shakeit.release.keyAlias")
+    .orElse(providers.environmentVariable("SHAKEIT_RELEASE_KEY_ALIAS"))
+    .orNull
+val releaseKeyPassword = providers.gradleProperty("shakeit.release.keyPassword")
+    .orElse(providers.environmentVariable("SHAKEIT_RELEASE_KEY_PASSWORD"))
+    .orNull
+val hasReleaseSigning = !releaseKeystore.isNullOrBlank() &&
+    File(releaseKeystore!!).exists() &&
+    !releaseStorePassword.isNullOrBlank() &&
+    !releaseKeyAlias.isNullOrBlank() &&
+    !releaseKeyPassword.isNullOrBlank()
+
+val releaseVersionName = providers.gradleProperty("release.versionName").orNull
+val releaseVersionCode = providers.gradleProperty("release.versionCode").orNull
+
 android {
     namespace = "com.shakeit"
     compileSdk = 36
 
-    if (hasDevelopmentSigning) {
-        signingConfigs {
+    signingConfigs {
+        if (hasDevelopmentSigning) {
             create("development") {
                 storeFile = File(developmentKeystore!!)
                 storePassword = developmentStorePassword
                 keyAlias = developmentKeyAlias
                 keyPassword = developmentKeyPassword
+            }
+        }
+        if (hasReleaseSigning) {
+            create("releaseSigning") {
+                storeFile = File(releaseKeystore!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
@@ -50,8 +79,8 @@ android {
         applicationId = "com.shakeit"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = releaseVersionCode?.toIntOrNull() ?: 1
+        versionName = releaseVersionName ?: "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -60,6 +89,11 @@ android {
         getByName("debug") {
             if (hasDevelopmentSigning) {
                 signingConfig = signingConfigs.getByName("development")
+            }
+        }
+        getByName("release") {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("releaseSigning")
             }
         }
     }
