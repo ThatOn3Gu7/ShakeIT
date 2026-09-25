@@ -739,7 +739,7 @@ not installed over a local or previous CI APK.
 
 Pushing a tag matching `v*` starts `.github/workflows/release.yml`. The workflow
 accepts only the repository owner `ThatOn3Gu7` or the verified Arena automation
-account `arena-agent`; all other tag pushes fail before the release build.
+actor `arena-ai-coding-agent[bot]`; all other tag pushes fail before the release build.
 
 Release signing uses the separate repository secrets
 `SHAKEIT_RELEASE_KEYSTORE_BASE64`, `SHAKEIT_RELEASE_STORE_PASSWORD`,

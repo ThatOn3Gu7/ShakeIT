@@ -9,11 +9,11 @@ permissions:
   contents: write
 
 # Discovered from the repository's GitHub commit metadata and verified through
-# GitHub: Arena uses the account `arena-agent` (user id 297053741). The other
-# authorized actor is the repository owner. Keep this list explicit: repository
-# write permission alone must never authorize a release.
+# GitHub reports Arena's actual workflow actor as `arena-ai-coding-agent[bot]`.
+# The other authorized actor is the repository owner. Keep this list explicit:
+# repository write permission alone must never authorize a release.
 env:
-  AUTHORIZED_RELEASE_ACTORS: 'ThatOn3Gu7 arena-agent'
+  AUTHORIZED_RELEASE_ACTORS: 'ThatOn3Gu7 arena-ai-coding-agent[bot]'
 
 jobs:
   authorize:
