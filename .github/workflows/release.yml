@@ -127,22 +127,35 @@ jobs:
         run: |
           set -euo pipefail
           cat > release-notes.md <<EOF
-          ## ShakeIT $RELEASE_TAG
+          # ShakeIT $RELEASE_TAG — First Official Release
 
-          ShakeIT turns a deliberate phone shake into flashlight control.
+          ShakeIT is a flashlight that responds to a deliberate shake, so you can toggle the torch without reaching for a button. This is the first official public release of the app.
 
-          ### Included functionality
+          ## Highlights
 
-          - Normal **Shake** and **Double Shake** gesture modes.
-          - Adjustable shake sensitivity with direct discrete-level selection.
-          - Subtle haptic feedback when the flashlight changes state and when sensitivity changes.
-          - Material 3 adaptive interface with light, dark, and system theme modes.
-          - Foreground-service background detection with sensor registration diagnostics, recovery reporting, wake-up sensor selection, and wake-lock handling where required.
-          - Optional automatic flashlight shutoff after five minutes.
-          - Diagnostics for sensor delivery, registration, recovery attempts, power restrictions, and prior process exits.
-          - Optional Shizuku-assisted Doze and background-app-operation repairs when Shizuku is legitimately available.
+          - **Shake to toggle:** one recognized shake toggles the flashlight.
+          - **Double Shake:** an optional shake-shake gesture requires two distinct bursts close together before toggling, helping avoid accidental activation from one continuous movement.
+          - **Sensitivity control:** choose how much motion is required, with direct discrete-level selection.
+          - **Haptic feedback:** subtle tactile confirmation accompanies real flashlight changes and sensitivity-level changes.
+          - **Automatic shutoff:** optionally turn the flashlight off after five minutes.
 
-          Screen-off and OEM background behavior remains device-dependent. The app reports sensor and service state, but no Android application can guarantee continuous sensor delivery on every manufacturer's power-management implementation.
+          ## Background operation and diagnostics
+
+          ShakeIT uses a foreground service and a dedicated sensor process for background detection. It selects a wake-up accelerometer when the device exposes one, uses a sensor thread, applies a wake lock when the active sensor stack requires it, and includes sensor registration checks, delivery monitoring, recovery attempts, and process-exit diagnostics.
+
+          The Diagnostics screen reports the active detector, registration and sample-delivery state, wake-up capability, wake-lock state, recovery history, power restrictions, and relevant process information.
+
+          ## Shizuku support
+
+          When Shizuku is installed and legitimately authorized, ShakeIT can request shell-level repairs for the system Doze allowlist and the background app operation. These actions are optional and are not required for normal foreground use.
+
+          ## Interface and customization
+
+          The app uses a Material 3 adaptive interface with light, dark, and system theme choices. The flashlight can also be controlled manually, while the Home screen reflects the selected gesture mode and current torch state.
+
+          ## Known limitations
+
+          Background and screen-off sensor delivery remains dependent on the device and its manufacturer's power-management policy. In particular, some OEM devices may stop delivering accelerometer samples while the screen is completely off even when the foreground service is alive. ShakeIT reports this condition through diagnostics, but it cannot guarantee continuous screen-off detection on every Android device.
           EOF
 
       - name: Publish GitHub Release
