@@ -1,0 +1,232 @@
+name: Android CI
+
+# A run should say what changed, so its name is the subject line of the commit
+# that triggered it (see `run-name` below). That is also why this workflow is
+# triggered by `push` and not by `pull_request`: a `pull_request` payload carries
+# no commit message at all, which is how every run of a branch with one open pull
+# request ended up named after that pull request's title — identical, and
+# therefore useless for telling one build from the next.
+#
+# Nothing is lost by dropping the `pull_request` trigger:
+#   * the checks still appear on the pull request, because a check run is
+#     attached to the head commit and the push event builds exactly that commit;
+#   * the failure report still lands as a pull request comment, because
+#     .github/scripts/report_failures.py already resolves the pull request from
+#     the head branch when the event is not `pull_request`.
+# What is lost is CI for pull requests opened *from a fork*, whose pushes run in
+# the fork rather than here. If this project starts taking fork contributions,
+# re-add `pull_request` as a second trigger and accept the duplicated runs.
+#
+# Path filtering is deliberate: a push that only touches the README, the design
+# mockup or other documentation gets no runner time at all.
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - 'gradle.properties'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/**'
+  workflow_dispatch:
+
+# The commit's own subject line, so the Actions list reads as a history of what
+# changed instead of one repeated title.
+#
+# A message with a body will carry that body into the name as well: GitHub
+# expressions have no way to split a string, and there is no API for renaming a
+# run after it starts. The subject comes first, which is what the list shows.
+# `workflow_dispatch` has no commit at all, so it says which ref was dispatched.
+run-name: >-
+  ${{ github.event_name == 'push' && github.event.head_commit.message
+  || format('Manual run on {0}', github.ref_name) }}
+
+# A newer push to the same ref supersedes the run in flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Every Gradle invocation tees its output into this file, which is uploaded as
+  # an artifact for the report job to parse.
+  GRADLE_LOG: build.log
+  GRADLE_ARGS: --console=plain --stacktrace
+  # These are repository secrets containing the shared development certificate.
+  # They are intentionally empty when the repository has not been configured;
+  # that falls back to AGP's ordinary debug key with an explicit warning.
+  SHAKEIT_DEV_KEYSTORE_BASE64: ${{ secrets.SHAKEIT_DEV_KEYSTORE_BASE64 }}
+  SHAKEIT_DEV_STORE_PASSWORD: ${{ secrets.SHAKEIT_DEV_STORE_PASSWORD }}
+  SHAKEIT_DEV_KEY_ALIAS: ${{ secrets.SHAKEIT_DEV_KEY_ALIAS }}
+  SHAKEIT_DEV_KEY_PASSWORD: ${{ secrets.SHAKEIT_DEV_KEY_PASSWORD }}
+
+jobs:
+  # The three checks below are independent on purpose: `assemble-debug` must run
+  # even when the tests or lint fail, because "does it compile" is the question
+  # that decides what gets fixed next. Adding `needs:` here would break that.
+  unit-tests:
+    name: Unit tests (JVM)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/prepare-build
+
+      - name: Run the JVM unit tests
+        shell: bash
+        run: |
+          set -uo pipefail
+          ./gradlew $GRADLE_ARGS :app:testDebugUnitTest 2>&1 | tee "$GRADLE_LOG"
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-unit-tests
+          path: ${{ env.GRADLE_LOG }}
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload the test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+          if-no-files-found: warn
+          retention-days: 7
+
+  lint:
+    name: Android Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/prepare-build
+
+      - name: Run Android Lint
+        shell: bash
+        run: |
+          set -uo pipefail
+          ./gradlew $GRADLE_ARGS :app:lintDebug 2>&1 | tee "$GRADLE_LOG"
+          status="${PIPESTATUS[0]}"
+          # Lint's findings only exist in its report files, so splice them into
+          # the log the report job parses. The text report is the readable one;
+          # the XML is the fallback if AGP ever moves the text output.
+          for report in app/build/reports/lint-results-debug.txt \
+                        app/build/reports/lint-results-debug.xml; do
+            if [ -f "$report" ]; then
+              { echo "--- $report ---"; cat "$report"; } >> "$GRADLE_LOG"
+            else
+              echo "missing report: $report" >> "$GRADLE_LOG"
+            fi
+          done
+          exit "$status"
+
+      - name: Upload the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-lint
+          path: ${{ env.GRADLE_LOG }}
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload the lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports
+          path: |
+            app/build/reports/lint-results-debug.html
+            app/build/reports/lint-results-debug.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+  assemble-debug:
+    name: Compile debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/prepare-build
+
+      - name: Compile and package the debug build
+        shell: bash
+        run: |
+          set -uo pipefail
+          ./gradlew $GRADLE_ARGS :app:assembleDebug 2>&1 | tee "$GRADLE_LOG"
+          exit "${PIPESTATUS[0]}"
+
+      - name: Print debug APK signer
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          apksigner=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-assemble-debug
+          path: ${{ env.GRADLE_LOG }}
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload the APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  report:
+    name: Report failures on the pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [unit-tests, lint, assemble-debug]
+    # Runs whatever the three checks did, so a red build always leaves an
+    # explanation behind instead of a bare cross.
+    if: always() && !cancelled()
+    permissions:
+      contents: read
+      # Upserting the report comment on the pull request.
+      pull-requests: write
+      # Reading the run's job conclusions and their log URLs.
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the build logs
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          path: ci-logs
+          pattern: logs-*
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Post or refresh the failure report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/report_failures.py --logs ci-logs

@@ -1,23 +1,130 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission 
-        android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />                
+
+    <!--
+      No CAMERA permission on purpose. CameraManager.setTorchMode() drives the
+      flash as a torch without opening the camera, which the platform allows
+      without it — so ShakeIT never asks for something it does not need.
+    -->
+
+    <!-- Keeps shake detection running with the screen off or the app backgrounded. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Android 13+: the service still runs without it, the notification is just hidden. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- One short tick when the torch really changes state. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!--
+      Held only while detection is armed and the screen is off, and only when a
+      sensor in use cannot wake the processor itself. SensorManager documents
+      that a non-wake-up sensor delivers nothing while the application processor
+      is suspended, so without this the service stays alive and its notification
+      stays up while samples silently stop arriving.
+    -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!--
+      Only used by BootReceiver, which is itself gated on the "Start after
+      reboot" switch in Settings. Nothing else in the app reacts to boot.
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      Package visibility (Android 11+): ShakeIT needs to be able to see whether
+      Shizuku is installed, and to launch it, before it can offer the privileged
+      repairs in Settings. Without this, getPackageInfo() throws NameNotFound on
+      a device that has Shizuku installed and the answer reads "not installed".
+    -->
+    <queries>
+        <package android:name="moe.shizuku.privileged.api" />
+    </queries>
+
+    <!--
+      Every one of these degrades instead of failing: no flash means the tap
+      does nothing, no accelerometer means only the tap works, and no proximity
+      sensor means the pocket guard is simply not applied.
+    -->
+    <uses-feature
+        android:name="android.hardware.camera.flash"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.sensor.accelerometer"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.sensor.proximity"
+        android:required="false" />
+
     <application
+        android:name=".ShakeItApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.ComposeEmptyActivity">
+        android:theme="@style/Theme.ShakeIT">
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.ComposeEmptyActivity">
+            android:theme="@style/Theme.ShakeIT">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          None of the platform's foreground service types describe "read the
+          accelerometer while the screen is off", which is what specialUse is
+          for; the property below states the reason, as Android 14 requires.
+
+          stopWithTask is false by default and stays that way on purpose: swiping
+          the task out of Recents removes the activity, not the detection.
+        -->
+        <service
+            android:name=".service.ShakeItService"
+            android:process=":sensor"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Recognises a deliberate shake from the accelerometer while the screen is off, locked or the app is backgrounded, so the user can toggle the flashlight without unlocking." />
+        </service>
+
+        <!-- Handles the notification's Stop action; stopping a service is
+               allowed from any app state, starting one from the background is not. -->
+        <receiver
+            android:name=".service.StopDetectionReceiver"
+            android:exported="false" />
+
+        <!--
+          Restarts detection after a reboot or an app update, when the user asked
+          for it. BOOT_COMPLETED is one of the few broadcasts from which starting
+          a foreground service is still allowed with no visible UI. Both actions
+          are protected system broadcasts, so exported="true" here cannot be
+          triggered by another app.
+        -->
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          Shizuku's binder hand-off. Shizuku delivers its IBinder to this
+          provider, which is how the app learns Shizuku is running without
+          polling; the declared permission keeps every other app out.
+          Documented form from the Shizuku-API README.
+        -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
-    
+
 </manifest>

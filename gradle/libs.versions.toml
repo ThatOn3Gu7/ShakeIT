@@ -5,6 +5,15 @@ coreKtx = "1.17.0"
 lifecycleRuntimeKtx = "2.9.2"
 activityCompose = "1.11.0"
 composeBom = "2025.10.01"
+# Shizuku: the only optional privileged path. Both artifacts are plain AARs on
+# Maven Central; the provider is what hands the app Shizuku's binder at process
+# start. 13.1.5 is also the first release without `Shizuku.newProcess` (removed
+# in 13.1.1 in favour of User Services), which is why privileged commands run
+# through background/ShizukuCommandService.kt rather than a one-line call.
+shizuku = "13.1.5"
+# Test-only. The version AGP's own unit-test scaffolding uses; it is not
+# referenced by any production dependency.
+junit = "4.13.2"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -22,3 +31,6 @@ androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "shizuku" }
+shizuku-provider = { group = "dev.rikka.shizuku", name = "provider", version.ref = "shizuku" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }

@@ -1,1 +1,28 @@
+# Gradle
 /.gradle
+**/build/
+!src/**/build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.cxx/
+captures/
+.externalNativeBuild/
+
+# Local configuration (SDK path, signing, per-machine overrides)
+local.properties
+
+# Kotlin
+.kotlin/
+
+# Keystores — never commit signing material
+*.jks
+*.keystore
+*.p12
+signing.properties
+
+# Python — the CI report script's compiled bytecode
+__pycache__/
+*.py[cod]
+/diff.md
