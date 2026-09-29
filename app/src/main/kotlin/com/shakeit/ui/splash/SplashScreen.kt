@@ -38,8 +38,11 @@ private val StrikeYellow = Color(0xFFFFE18A)
 fun ShakeItSplash(onFinished: () -> Unit) {
     val progress = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        progress.animateTo(1f, tween(480, easing = FastOutSlowInEasing))
-        delay(80)
+        // Give the strike enough time to read as an intentional activation on
+        // very fast launches: twice the original 480 ms travel, plus a slightly
+        // longer impact hold before handing off to the home screen.
+        progress.animateTo(1f, tween(960, easing = FastOutSlowInEasing))
+        delay(160)
         onFinished()
     }
 
