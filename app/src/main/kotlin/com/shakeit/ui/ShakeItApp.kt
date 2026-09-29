@@ -1,7 +1,6 @@
 package com.shakeit.ui
 
 import androidx.activity.BackEventCompat
-import androidx.activity.ExperimentalActivityApi
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -44,7 +43,6 @@ import kotlinx.coroutines.launch
  *   is actually wrong — sending the user to the home screen first would hide the
  *   answer behind a tap they did not ask for.
  */
-@OptIn(ExperimentalActivityApi::class)
 @Composable
 fun ShakeItApp(
     state: ShakeItState = rememberShakeItState(),

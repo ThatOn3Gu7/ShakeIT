@@ -1,6 +1,7 @@
 package com.shakeit.ui.navigation
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animate
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -53,9 +54,12 @@ fun ShakeItNavHost(
     // spring, so the transition returns naturally to Settings.
     LaunchedEffect(cancelledBackFrom) {
         val start = cancelledBackFrom ?: return@LaunchedEffect
-        val settle = Animatable(start)
         cancelledProgress = start
-        settle.animateTo(1f, ShakeItMotion.Screen) {
+        animate(
+            initialValue = start,
+            targetValue = 1f,
+            animationSpec = ShakeItMotion.Screen,
+        ) { value, _ ->
             cancelledProgress = value
         }
         cancelledProgress = null
