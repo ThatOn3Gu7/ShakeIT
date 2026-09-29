@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- Deliberately stepped aura: easy to animate or remove independently later. -->
-    <path android:fillColor="#18FFD45D" android:pathData="M42,10h18v4h7v7h4v20h-4v7H41v-7h-7V21h8z" />
-    <path android:fillColor="#20FFB33F" android:pathData="M38,18h31v5h5v20h-5v6H38v-6h-5V23h5z" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Stepped warm aura and independent ember shapes, kept behind the torch. -->
+    <path android:fillColor="#18FF8A00" android:pathData="M39,25h7v-7h7v-5h10v5h8v8h7v20H71v9H48v-6h-9z" />
+    <path android:fillColor="#FFFFB800" android:pathData="M44,18h3v4h-3zM79,20h3v4h-3zM37,31h4v5h-4zM83,34h3v4h-3zM73,50h4v4h-4zM42,50h3v4h-3z" />
 </vector>
