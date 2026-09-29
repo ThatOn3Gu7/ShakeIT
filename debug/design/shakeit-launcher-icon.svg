@@ -1,27 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- ShakeIT torch icon source, redrawn from debug/shakeit-torch-icon-reference.jpg.
-     The torch, flame, glow and embers are intentionally separate groups. -->
+<!-- ShakeIT launcher source: the same simple Material-style torch mark used by the app hero. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
-  <defs>
-    <linearGradient id="background" x1="12" y1="8" x2="96" y2="100" gradientUnits="userSpaceOnUse"><stop stop-color="#02050A"/><stop offset="1" stop-color="#08121B"/></linearGradient>
-    <linearGradient id="wood" x1="31" y1="87" x2="59" y2="42" gradientUnits="userSpaceOnUse"><stop stop-color="#54261D"/><stop offset=".48" stop-color="#9C4B24"/><stop offset="1" stop-color="#D27A2E"/></linearGradient>
-    <radialGradient id="glow"><stop stop-color="#FFF36D" stop-opacity=".8"/><stop offset=".34" stop-color="#FF9D00" stop-opacity=".4"/><stop offset="1" stop-color="#FF5A00" stop-opacity="0"/></radialGradient>
-  </defs>
+  <defs><linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#080D1B"/><stop offset="1" stop-color="#050811"/></linearGradient></defs>
   <rect width="108" height="108" fill="url(#background)"/>
-  <g id="glow"><ellipse cx="62" cy="34" rx="27" ry="29" fill="url(#glow)"/><path fill="#FF8A00" opacity=".13" d="M39 25h7v-7h7v-5h10v5h8v8h7v20H71v9H48v-6h-9z"/></g>
-  <g id="embers" fill="#FFB800"><path d="M44 18h3v4h-3z"/><path d="M79 20h3v4h-3z"/><path d="M37 31h4v5h-4z"/><path d="M83 34h3v4h-3z"/><path d="M73 50h4v4h-4z"/><path d="M42 50h3v4h-3z"/></g>
-  <g id="torch" stroke="#21151A" stroke-width="1.5" stroke-linejoin="bevel">
-    <path fill="#6B2C1D" d="M47 42l15 8-23 42q-3 4-7 1l-5-4q-2-2 0-5z"/>
-    <path fill="url(#wood)" d="M48 44l11 6-22 39q-2 3-5 1l-4-3q-1-1 1-4z"/>
-    <path fill="#E18735" d="M49 47l5 3-21 38-4-3z"/>
-    <path fill="#71321F" d="M43 56l9 5-4 7-9-5zM35 71l9 5-4 7-9-5z"/>
-    <path fill="#C75E27" d="M51 51l6 3-3 6-6-3zM31 84l6 3-3 5-6-4z"/>
-    <path fill="#352027" d="M28 82l7 4-3 5-6-4z"/>
-    <path fill="#F05A18" d="M51 48h13v7H51z"/>
-    <path fill="#FF8E12" d="M52 45h12v9H52z"/>
-    <path fill="#F35B13" d="M58 43h11v7H58zM62 36h10v8H62zM66 26h9v12H66zM69 16h8v13H69z"/>
-    <path fill="#FF9F0A" d="M56 42h11v8H56zM61 34h11v9H61zM65 25h9v12H65zM69 17h7v11H69z"/>
-    <path fill="#FFD52C" d="M55 38h12v10H55zM61 29h10v10H61zM65 23h7v9H65z"/>
-    <path fill="#FFF58A" d="M58 37h9v8H58zM62 29h7v8H62z"/>
-  </g>
+  <path fill="#FFB84A" d="M31.5 9h27v9h-9v31.5H63V99l31.5-54h-18L94.5 9z"/>
 </svg>
