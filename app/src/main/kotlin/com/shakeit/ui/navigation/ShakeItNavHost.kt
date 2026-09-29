@@ -1,10 +1,14 @@
 package com.shakeit.ui.navigation
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
@@ -12,39 +16,64 @@ import com.shakeit.state.ShakeItState
 import com.shakeit.ui.theme.ShakeItMotion
 
 /**
- * A small, dependency-free navigation host for the app's two destinations.
- *
- * The old host used a fixed 300ms tween and translated both screens by the same
- * 16dp. This one keeps the same lightweight stacked-screen architecture, but the
- * progress is a spring: opening Settings can be reversed by Back immediately,
- * and the screen continues from its current position instead of restarting a
- * clock. The underlying Home remains composed, so the blob loop still pauses
- * exactly when Settings is on top.
+ * Dependency-free two-screen host. One progress value drives both layers:
+ * zero is Home, one is Settings. Predictive back temporarily supplies that
+ * value directly; ordinary navigation animates the same value with Screen.
  */
 @Composable
 fun ShakeItNavHost(
     screen: ShakeItState.Screen,
     modifier: Modifier = Modifier,
+    interactiveBackProgress: Float? = null,
+    cancelledBackFrom: Float? = null,
+    skipNextAnimation: Boolean = false,
+    onCancelAnimationFinished: () -> Unit = {},
+    onSkippedAnimationApplied: () -> Unit = {},
     home: @Composable () -> Unit,
     settings: @Composable () -> Unit,
 ) {
     val settingsShown = screen == ShakeItState.Screen.SETTINGS
-    val homeProgress by animateFloatAsState(
-        targetValue = if (settingsShown) 0f else 1f,
-        animationSpec = ShakeItMotion.Screen,
-        label = "homeProgress",
-    )
-    val settingsProgress by animateFloatAsState(
-        targetValue = if (settingsShown) 1f else 0f,
-        animationSpec = ShakeItMotion.Screen,
-        label = "settingsProgress",
-    )
+    val targetProgress = if (settingsShown) 1f else 0f
+    val transition = remember { Animatable(targetProgress) }
+    var cancelledProgress by remember { mutableStateOf<Float?>(null) }
+
+    // Normal navigation remains the existing spring-driven screen motion. A
+    // committed predictive gesture snaps to its already-completed destination,
+    // preventing a second Settings-to-Home animation after the finger lifts.
+    LaunchedEffect(screen, skipNextAnimation) {
+        if (skipNextAnimation) {
+            transition.snapTo(targetProgress)
+            onSkippedAnimationApplied()
+        } else {
+            transition.animateTo(targetProgress, ShakeItMotion.Screen)
+        }
+    }
+
+    // A cancelled gesture hands its last visual position to the same screen
+    // spring, so the transition returns naturally to Settings.
+    LaunchedEffect(cancelledBackFrom) {
+        val start = cancelledBackFrom ?: return@LaunchedEffect
+        val settle = Animatable(start)
+        cancelledProgress = start
+        settle.animateTo(1f, ShakeItMotion.Screen) {
+            cancelledProgress = value
+        }
+        cancelledProgress = null
+        onCancelAnimationFinished()
+    }
+
+    val progress = when {
+        interactiveBackProgress != null -> 1f - interactiveBackProgress
+        cancelledProgress != null -> cancelledProgress!!
+        skipNextAnimation -> targetProgress
+        else -> transition.value
+    }
 
     Box(modifier.fillMaxSize()) {
-        ScreenLayer(progress = homeProgress, content = home)
+        ScreenLayer(progress = 1f - progress, content = home)
 
-        if (settingsShown || settingsProgress > 0.001f) {
-            ScreenLayer(progress = settingsProgress, content = settings)
+        if (settingsShown || progress > 0.001f || interactiveBackProgress != null) {
+            ScreenLayer(progress = progress, content = settings)
         }
     }
 }

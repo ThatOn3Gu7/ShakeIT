@@ -1,6 +1,8 @@
 package com.shakeit.ui
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.BackEventCompat
+import androidx.activity.ExperimentalActivityApi
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -23,6 +25,8 @@ import com.shakeit.ui.navigation.ShakeItNavHost
 import com.shakeit.ui.settings.SettingsScreen
 import com.shakeit.ui.splash.ShakeItSplash
 import com.shakeit.ui.theme.ShakeItTheme
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 /**
@@ -40,6 +44,7 @@ import kotlinx.coroutines.launch
  *   is actually wrong — sending the user to the home screen first would hide the
  *   answer behind a tap they did not ask for.
  */
+@OptIn(ExperimentalActivityApi::class)
 @Composable
 fun ShakeItApp(
     state: ShakeItState = rememberShakeItState(),
@@ -82,6 +87,29 @@ fun ShakeItApp(
         ThemeMode.Light -> false
     }
     var showSplash = remember { mutableStateOf(true) }
+    var interactiveBackProgress by remember { mutableStateOf<Float?>(null) }
+    var cancelledBackFrom by remember { mutableStateOf<Float?>(null) }
+    var skipNextScreenAnimation by remember { mutableStateOf(false) }
+
+    // Predictive back owns the visual progress only while the Settings gesture is
+    // active. A completed gesture snaps the host to Home; a cancelled one hands
+    // the last position back to the host's existing spring.
+    PredictiveBackHandler(enabled = state.screen == ShakeItState.Screen.SETTINGS) { progress ->
+        var lastProgress = 0f
+        try {
+            progress.collect { event: BackEventCompat ->
+                lastProgress = event.progress
+                cancelledBackFrom = null
+                interactiveBackProgress = event.progress
+            }
+            interactiveBackProgress = null
+            skipNextScreenAnimation = true
+            state.closeSettings()
+        } catch (_: CancellationException) {
+            interactiveBackProgress = null
+            cancelledBackFrom = 1f - lastProgress
+        }
+    }
 
     // The background is the only colour the prototype transitions on a theme
     // change; everything else in the palette swaps immediately.
@@ -93,6 +121,11 @@ fun ShakeItApp(
         ) {
             ShakeItNavHost(
                 screen = state.screen,
+                interactiveBackProgress = interactiveBackProgress,
+                cancelledBackFrom = cancelledBackFrom,
+                skipNextAnimation = skipNextScreenAnimation,
+                onCancelAnimationFinished = { cancelledBackFrom = null },
+                onSkippedAnimationApplied = { skipNextScreenAnimation = false },
                 home = {
                     HomeScreen(
                         torchOn = state.torchOn,
@@ -123,12 +156,6 @@ fun ShakeItApp(
             if (showSplash.value) {
                 ShakeItSplash(onFinished = { showSplash.value = false })
             }
-        }
-
-        // The prototype's back arrow is the only way out of Settings; map the
-        // system gesture/button onto it.
-        BackHandler(enabled = state.screen == ShakeItState.Screen.SETTINGS) {
-            state.closeSettings()
         }
     }
 }
