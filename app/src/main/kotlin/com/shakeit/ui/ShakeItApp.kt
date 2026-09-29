@@ -1,6 +1,6 @@
 package com.shakeit.ui
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -9,8 +9,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.MaterialTheme
 import com.shakeit.engine.ShakeItEngine
@@ -23,6 +25,7 @@ import com.shakeit.ui.navigation.ShakeItNavHost
 import com.shakeit.ui.settings.SettingsScreen
 import com.shakeit.ui.splash.ShakeItSplash
 import com.shakeit.ui.theme.ShakeItTheme
+import java.util.concurrent.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -83,6 +86,12 @@ fun ShakeItApp(
     }
     var showSplash = remember { mutableStateOf(true) }
 
+    // Transient per-frame gesture input, not app state: how far an in-flight
+    // system back gesture has moved the Settings → Home transition
+    // (0 = fully Settings, 1 = fully Home). It deliberately never touches
+    // ShakeItState, whose snapshot is persisted to preferences.
+    var backProgress by remember { mutableFloatStateOf(0f) }
+
     // The background is the only colour the prototype transitions on a theme
     // change; everything else in the palette swaps immediately.
     ShakeItTheme(darkTheme = isDark, dynamicColor = state.dynamicColor) {
@@ -93,6 +102,7 @@ fun ShakeItApp(
         ) {
             ShakeItNavHost(
                 screen = state.screen,
+                backProgress = backProgress,
                 home = {
                     HomeScreen(
                         torchOn = state.torchOn,
@@ -125,10 +135,29 @@ fun ShakeItApp(
             }
         }
 
-        // The prototype's back arrow is the only way out of Settings; map the
-        // system gesture/button onto it.
-        BackHandler(enabled = state.screen == ShakeItState.Screen.SETTINGS) {
-            state.closeSettings()
+        // The prototype's back arrow is the tap-side way out of Settings; the
+        // system gesture/button follows the same contract, but on Android 14+
+        // it arrives as a stream of progress events. Those drive the host's
+        // existing transition directly, so the screens track the finger; the
+        // navigation itself is applied only once the system commits, and the
+        // transition then finishes from exactly where the gesture left it
+        // instead of replaying. On a cancelled gesture the progress returns to
+        // 0 and the same springs settle back to Settings. On plain back
+        // presses (and on pre-Android 14 devices) the flow completes empty and
+        // the normal full animation plays, exactly as before.
+        PredictiveBackHandler(enabled = state.screen == ShakeItState.Screen.SETTINGS) { progress ->
+            try {
+                progress.collect { backProgress = it.progress }
+                // The commit does not necessarily arrive at progress 1f, so
+                // drive the transition to completion explicitly.
+                backProgress = 1f
+                state.closeSettings()
+            } catch (e: CancellationException) {
+                // Gesture cancelled: restore the progress; the springs settle
+                // back to Settings from their current position.
+                backProgress = 0f
+                throw e
+            }
         }
     }
 }

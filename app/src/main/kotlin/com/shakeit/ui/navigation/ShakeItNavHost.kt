@@ -20,22 +20,34 @@ import com.shakeit.ui.theme.ShakeItMotion
  * and the screen continues from its current position instead of restarting a
  * clock. The underlying Home remains composed, so the blob loop still pauses
  * exactly when Settings is on top.
+ *
+ * [backProgress] is how an in-flight system back gesture reaches the host:
+ * while the finger is moving, the spring targets follow the gesture's progress
+ * (0 = Settings fully up, 1 = Home fully up) instead of the boolean screen
+ * state, so the existing transition becomes interactive. On commit or cancel
+ * the same springs settle from wherever the finger left them, which is what
+ * keeps the transition from replaying after the gesture. With no gesture
+ * running the value is 0 and the ordinary open/close transitions are exactly
+ * as before.
  */
 @Composable
 fun ShakeItNavHost(
     screen: ShakeItState.Screen,
+    backProgress: Float = 0f,
     modifier: Modifier = Modifier,
     home: @Composable () -> Unit,
     settings: @Composable () -> Unit,
 ) {
     val settingsShown = screen == ShakeItState.Screen.SETTINGS
+    val homeTarget = if (settingsShown) backProgress else 1f
+    val settingsTarget = 1f - homeTarget
     val homeProgress by animateFloatAsState(
-        targetValue = if (settingsShown) 0f else 1f,
+        targetValue = homeTarget,
         animationSpec = ShakeItMotion.Screen,
         label = "homeProgress",
     )
     val settingsProgress by animateFloatAsState(
-        targetValue = if (settingsShown) 1f else 0f,
+        targetValue = settingsTarget,
         animationSpec = ShakeItMotion.Screen,
         label = "settingsProgress",
     )
