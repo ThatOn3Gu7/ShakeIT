@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ShakeIT original block-torch source artwork. No launcher mask is baked in. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <defs>
+    <linearGradient id="background" x1="12" y1="8" x2="96" y2="100" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101B36"/><stop offset="1" stop-color="#050914"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="38" y1="43" x2="66" y2="86" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B96832"/><stop offset="1" stop-color="#6D321F"/>
+    </linearGradient>
+    <radialGradient id="aura"><stop stop-color="#FFD66B" stop-opacity=".38"/><stop offset="1" stop-color="#FF9E3D" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="108" height="108" fill="url(#background)"/>
+  <circle cx="54" cy="31" r="30" fill="url(#aura)"/>
+  <g id="torch" stroke="#251827" stroke-width="2" stroke-linejoin="bevel">
+    <path fill="#E06A28" d="M45 18h10v4h7v7h-4v7H39v-7h-4v-7h10z"/>
+    <path fill="#FFD45D" d="M46 20h8v5h5v6h-6v5h-9v-5h-5v-6h7z"/>
+    <path fill="#FFF0A3" d="M48 24h5v5h4v3h-8v-4h-3v-3h2z"/>
+    <path fill="url(#wood)" d="M39 35h28v8h-4v36h-5v8H44v-8h-5V43h-4v-8z"/>
+    <path fill="#D78A3F" d="M43 43h7v35h-7zM58 43h5v35h-5z"/>
+    <path fill="#48252A" d="M39 48h28v7H39zM39 67h28v6H39z"/>
+    <path fill="#F0A44B" d="M44 57h7v5h-7zM58 57h5v5h-5z"/>
+    <path fill="#3A2430" d="M42 79h21v8H42z"/>
+  </g>
+</svg>

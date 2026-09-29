@@ -1,55 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-
-    <!-- Soft amber light is deliberately inside the adaptive safe area so the
-         launcher mask can crop around it without losing the subject. -->
-    <path
-        android:fillColor="#24FFB84A"
-        android:pathData="M60,36 L91,23 L72,48 Z" />
-    <path
-        android:fillColor="#35FFCC68"
-        android:pathData="M58,39 L84,30 L70,48 Z" />
-    <path
-        android:fillColor="#26FFB84A"
-        android:pathData="M62,34a13,13 0,1 0,0.1,0" />
-
-    <!-- Rear shadow gives the small mark a little separation from the dark field. -->
-    <path
-        android:fillColor="#70000000"
-        android:pathData="M34,69 L49,45 L70,56 L56,81 L45,84 Z" />
-
-    <!-- Flashlight body. -->
-    <path
-        android:fillColor="#242C40"
-        android:pathData="M34,67 L48,43 L69,54 L56,78 Q54,82 50,81 L39,75 Q33,72 34,67 Z" />
-    <path
-        android:fillColor="#3A455C"
-        android:pathData="M39,65 L51,48 L63,54 L51,75 Q50,77 47,75 L40,71 Q37,69 39,65 Z" />
-    <path
-        android:fillColor="#59657A"
-        android:pathData="M42,61 L53,51 L58,54 L47,68 Z" />
-
-    <!-- Warm metal rim and luminous lens. -->
-    <path
-        android:fillColor="#F0A83B"
-        android:pathData="M48,43 L57,36 Q60,34 64,36 L72,41 Q74,43 72,47 L68,54 Z" />
-    <path
-        android:fillColor="#FFD978"
-        android:pathData="M55,40 L60,37 Q62,36 64,38 L69,41 Q70,42 69,44 L66,49 Z" />
-    <path
-        android:fillColor="#FFFFE0"
-        android:pathData="M59,39 Q61,37 63,39 L67,41 L64,46 L59,43 Q58,41 59,39 Z" />
-
-    <!-- Small grip accents remain visible at launcher scale. -->
-    <path
-        android:fillColor="#A9B4C8"
-        android:pathData="M41,70 L48,74 L46,77 L39,73 Z" />
-    <path
-        android:fillColor="#A9B4C8"
-        android:pathData="M38,66 L45,70 L43,73 L36,69 Z" />
-</vector>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Layered block-torch foreground; each visual component remains independently editable. -->
+    <item android:drawable="@drawable/ic_launcher_torch_glow" />
+    <item android:drawable="@drawable/ic_launcher_torch_body" />
+    <item android:drawable="@drawable/ic_launcher_torch_flame" />
+</layer-list>
