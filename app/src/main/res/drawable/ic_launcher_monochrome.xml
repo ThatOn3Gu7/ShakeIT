@@ -4,7 +4,6 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M34,67 L48,43 L57,36 Q60,34 64,36 L72,41 Q74,43 72,47 L68,54 L56,78 Q54,82 50,81 L39,75 Q33,72 34,67 Z" />
+    <!-- Solid block-torch silhouette for themed launcher icons. -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M45,18h10v4h7v7h-4v7h5v7h-4v36H44V43h-5v-7h-4v-7h10z" />
 </vector>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Original block flame, separated from the handle for future ignition/flicker work. -->
+    <path android:fillColor="#E06A28" android:strokeColor="#251827" android:strokeWidth="2" android:strokeLineJoin="bevel"
+        android:pathData="M45,18h10v4h7v7h-4v7H39v-7h-4v-7h10z" />
+    <path android:fillColor="#FFD45D" android:strokeColor="#251827" android:strokeWidth="2" android:strokeLineJoin="bevel"
+        android:pathData="M46,20h8v5h5v6h-6v5h-9v-5h-5v-6h7z" />
+    <path android:fillColor="#FFF0A3" android:pathData="M48,24h5v5h4v3h-8v-4h-3v-3h2z" />
+</vector>
