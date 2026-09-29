@@ -9,6 +9,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.MaterialTheme
 import com.shakeit.engine.ShakeItEngine
@@ -19,6 +21,7 @@ import com.shakeit.state.rememberShakeItState
 import com.shakeit.ui.home.HomeScreen
 import com.shakeit.ui.navigation.ShakeItNavHost
 import com.shakeit.ui.settings.SettingsScreen
+import com.shakeit.ui.splash.ShakeItSplash
 import com.shakeit.ui.theme.ShakeItTheme
 import kotlinx.coroutines.launch
 
@@ -78,6 +81,7 @@ fun ShakeItApp(
         ThemeMode.Dark -> true
         ThemeMode.Light -> false
     }
+    var showSplash = remember { mutableStateOf(true) }
 
     // The background is the only colour the prototype transitions on a theme
     // change; everything else in the palette swaps immediately.
@@ -116,6 +120,9 @@ fun ShakeItApp(
                     )
                 },
             )
+            if (showSplash.value) {
+                ShakeItSplash(onFinished = { showSplash.value = false })
+            }
         }
 
         // The prototype's back arrow is the only way out of Settings; map the

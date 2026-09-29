@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The prototype's dark `bg` custom property. -->
-    <color name="shakeit_window_background">#121016</color>
+    <!-- Dark starting window for the lightning activation splash. -->
+    <color name="shakeit_window_background">#050811</color>
 </resources>
