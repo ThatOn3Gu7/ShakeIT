@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The prototype's light `bg` custom property. -->
-    <color name="shakeit_window_background">#F6F1FB</color>
+    <!-- Dark starting window so the lightning strike begins on the same field as the splash. -->
+    <color name="shakeit_window_background">#050811</color>
 </resources>
