@@ -2,6 +2,7 @@ package com.shakeit.ui
 
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -28,6 +29,8 @@ import com.shakeit.ui.theme.ShakeItTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+
+private const val PREDICTIVE_BACK_TAG = "ShakeItPredictiveBack"
 
 /**
  * Root of the app: resolves the theme, owns the state, mirrors the hardware into
@@ -95,18 +98,32 @@ fun ShakeItApp(
     // the last position back to the host's existing spring.
     PredictiveBackHandler(enabled = state.screen == ShakeItState.Screen.SETTINGS) { progress ->
         var lastProgress = 0f
+        var loggedFirstProgress = false
+        var lastLoggedProgressBucket = -1
+        Log.d(PREDICTIVE_BACK_TAG, "gesture started")
         try {
             progress.collect { event: BackEventCompat ->
                 lastProgress = event.progress
                 cancelledBackFrom = null
                 interactiveBackProgress = event.progress
+                if (!loggedFirstProgress) {
+                    loggedFirstProgress = true
+                    Log.d(PREDICTIVE_BACK_TAG, "first progress=${event.progress}")
+                }
+                val progressBucket = (event.progress * 4f).toInt()
+                if (progressBucket != lastLoggedProgressBucket) {
+                    lastLoggedProgressBucket = progressBucket
+                    Log.d(PREDICTIVE_BACK_TAG, "progress=${event.progress}")
+                }
             }
             interactiveBackProgress = null
             skipNextScreenAnimation = true
             state.closeSettings()
+            Log.d(PREDICTIVE_BACK_TAG, "gesture committed")
         } catch (_: CancellationException) {
             interactiveBackProgress = null
             cancelledBackFrom = 1f - lastProgress
+            Log.d(PREDICTIVE_BACK_TAG, "gesture cancelled at progress=$lastProgress")
         }
     }
 
@@ -141,7 +158,15 @@ fun ShakeItApp(
                 settings = {
                     SettingsScreen(
                         state = state,
-                        onBack = state::closeSettings,
+                        onBack = {
+                            // The top-left arrow is ordinary navigation, so clear
+                            // any stale gesture handoff before running the normal
+                            // Settings -> Home spring.
+                            interactiveBackProgress = null
+                            cancelledBackFrom = null
+                            skipNextScreenAnimation = false
+                            state.closeSettings()
+                        },
                         diagnostics = diagnostics,
                         onOpenBatterySettings = { engine.openBatterySettings() },
                         onOpenAppSettings = { engine.openAppSettings() },
