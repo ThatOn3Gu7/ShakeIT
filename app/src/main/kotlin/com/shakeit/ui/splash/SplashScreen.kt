@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -74,16 +75,9 @@ fun ShakeItSplash(onFinished: () -> Unit) {
                 modifier = Modifier
                     .size(132.dp)
                     .align(Alignment.Center)
-                    .offsetY(strikeY)
+                    .graphicsLayer { translationY = strikeY }
                     .alpha(0.92f + 0.08f * impact),
             )
         }
     }
 }
-
-private fun Modifier.offsetY(value: Float): Modifier = this.then(
-    Modifier.graphicsTranslationY(value),
-)
-
-private fun Modifier.graphicsTranslationY(value: Float): Modifier =
-    androidx.compose.ui.graphics.graphicsLayer { translationY = value }
