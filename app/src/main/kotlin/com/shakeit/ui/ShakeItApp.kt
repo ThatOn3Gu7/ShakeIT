@@ -1,5 +1,6 @@
 package com.shakeit.ui
 
+import android.util.Log
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -27,6 +28,11 @@ import com.shakeit.ui.splash.ShakeItSplash
 import com.shakeit.ui.theme.ShakeItTheme
 import java.util.concurrent.CancellationException
 import kotlinx.coroutines.launch
+
+// TEMPORARY DIAGNOSTIC — logcat tag for the predictive-back event flow
+// logging below. Remove this constant together with the logging once it has
+// served its purpose.
+private const val PREDICTIVE_BACK_DIAG_TAG = "ShakeIT-PredictiveBack"
 
 /**
  * Root of the app: resolves the theme, owns the state, mirrors the hardware into
@@ -150,15 +156,33 @@ fun ShakeItApp(
         // settle back to Settings. On plain back presses (and on pre-Android
         // 14 devices) the flow completes empty and the normal full animation
         // plays, exactly as before.
+        // ------------------------------------------------------------------
+        // TEMPORARY DIAGNOSTIC — this logging exists to answer exactly one
+        // question: does the platform deliver BackEventCompat progress events
+        // to this app during the system edge-back gesture? It changes no
+        // behavior of the handler: the same flow is collected, the same
+        // commit/cancel handling runs. Remove it once the event flow has been
+        // verified on-device.
+        // ------------------------------------------------------------------
         PredictiveBackHandler(enabled = state.screen == ShakeItState.Screen.SETTINGS) { progress ->
+            Log.d(PREDICTIVE_BACK_DIAG_TAG, "handler invoked: back operation started (enabled while Settings is shown)")
             try {
                 backGestureActive = true
-                progress.collect { backGestureProgress = it.progress }
+                progress.collect { event ->
+                    Log.d(
+                        PREDICTIVE_BACK_DIAG_TAG,
+                        "progress event: progress=${event.progress} swipeEdge=${event.swipeEdge} " +
+                            "(0=left, 1=right, 2=not-an-edge-swipe) touchX=${event.touchX} touchY=${event.touchY}",
+                    )
+                    backGestureProgress = event.progress
+                }
+                Log.d(PREDICTIVE_BACK_DIAG_TAG, "flow completed normally → COMMIT")
                 // Committed: flip the navigation; the host finishes the
                 // transition from the gesture's position (the last progress
                 // event is not necessarily 1f, so the settle completes it).
                 state.closeSettings()
             } catch (e: CancellationException) {
+                Log.d(PREDICTIVE_BACK_DIAG_TAG, "flow cancelled via CancellationException → CANCEL")
                 // Cancelled: the screen stays Settings and the host settles
                 // back from the preview position on its own.
                 throw e
