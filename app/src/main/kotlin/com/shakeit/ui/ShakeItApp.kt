@@ -1,5 +1,6 @@
 package com.shakeit.ui
 
+import android.os.Build
 import android.util.Log
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
@@ -201,7 +202,7 @@ fun ShakeItApp(
         // verified on-device.
         // ------------------------------------------------------------------
         PredictiveBackHandler(enabled = state.screen == ShakeItState.Screen.SETTINGS) { progress ->
-            Log.d(PREDICTIVE_BACK_DIAG_TAG, "handler invoked: back operation started (enabled while Settings is shown)")
+            Log.d(PREDICTIVE_BACK_DIAG_TAG, "handler invoked: back operation started (enabled while Settings is shown; device API ${Build.VERSION.SDK_INT})")
             // Temporary on-screen diagnostic: show the readout for this gesture.
             backOutcome = null
             showBackDiag = true
@@ -280,6 +281,12 @@ private fun PredictiveBackOverlay(
             )
             Text(
                 text = "swipeEdge = $swipeEdge ($edgeLabel)",
+                color = Color.White,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+            )
+            Text(
+                text = "device API = ${Build.VERSION.SDK_INT}",
                 color = Color.White,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
