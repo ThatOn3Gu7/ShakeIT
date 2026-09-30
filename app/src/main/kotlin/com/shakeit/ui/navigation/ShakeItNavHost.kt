@@ -21,36 +21,48 @@ import com.shakeit.ui.theme.ShakeItMotion
  * clock. The underlying Home remains composed, so the blob loop still pauses
  * exactly when Settings is on top.
  *
- * [backProgress] is how an in-flight system back gesture reaches the host:
- * while the finger is moving, the spring targets follow the gesture's progress
- * (0 = Settings fully up, 1 = Home fully up) instead of the boolean screen
- * state, so the existing transition becomes interactive. On commit or cancel
- * the same springs settle from wherever the finger left them, which is what
- * keeps the transition from replaying after the gesture. With no gesture
- * running the value is 0 and the ordinary open/close transitions are exactly
- * as before.
+ * The navigation state ([screen]) is authoritative about which screen is
+ * active, and owns the resting targets. An in-flight system back gesture only
+ * temporarily overrides them: while [backGestureActive] is true the rendered
+ * transition is [backGestureProgress] (the system's own progress, 0 =
+ * Settings fully up, 1 = Home fully up) *exactly* — there is no animation
+ * between the finger and the screens. The springs' targets track the same
+ * progress in the background, so when the gesture commits or cancels and the
+ * gesture state is dropped, the springs settle from wherever the finger left
+ * them into the resting state the navigation now describes. That is what
+ * keeps the transition from replaying after a commit, and because the
+ * progress only enters the targets while the gesture is active, a stale
+ * gesture value can never affect a later Settings entry.
  */
 @Composable
 fun ShakeItNavHost(
     screen: ShakeItState.Screen,
-    backProgress: Float = 0f,
+    backGestureActive: Boolean = false,
+    backGestureProgress: Float = 0f,
     modifier: Modifier = Modifier,
     home: @Composable () -> Unit,
     settings: @Composable () -> Unit,
 ) {
     val settingsShown = screen == ShakeItState.Screen.SETTINGS
-    val homeTarget = if (settingsShown) backProgress else 1f
+    val homeTarget = if (backGestureActive) backGestureProgress
+        else if (settingsShown) 0f
+        else 1f
     val settingsTarget = 1f - homeTarget
-    val homeProgress by animateFloatAsState(
+    val homeSettled by animateFloatAsState(
         targetValue = homeTarget,
         animationSpec = ShakeItMotion.Screen,
         label = "homeProgress",
     )
-    val settingsProgress by animateFloatAsState(
+    val settingsSettled by animateFloatAsState(
         targetValue = settingsTarget,
         animationSpec = ShakeItMotion.Screen,
         label = "settingsProgress",
     )
+    // While the gesture is in flight the layers are driven by the system's
+    // progress directly; off the gesture they are driven by the springs,
+    // which continue from the gesture position on commit/cancel.
+    val homeProgress = if (backGestureActive) backGestureProgress else homeSettled
+    val settingsProgress = if (backGestureActive) 1f - backGestureProgress else settingsSettled
 
     Box(modifier.fillMaxSize()) {
         ScreenLayer(progress = homeProgress, content = home)

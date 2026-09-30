@@ -86,11 +86,15 @@ fun ShakeItApp(
     }
     var showSplash = remember { mutableStateOf(true) }
 
-    // Transient per-frame gesture input, not app state: how far an in-flight
-    // system back gesture has moved the Settings → Home transition
-    // (0 = fully Settings, 1 = fully Home). It deliberately never touches
-    // ShakeItState, whose snapshot is persisted to preferences.
-    var backProgress by remember { mutableFloatStateOf(0f) }
+    // Transient interactive gesture state, kept strictly apart from the
+    // navigation state: `state.screen` is authoritative about which screen is
+    // active, while these two values exist only while the system's predictive
+    // back gesture is in flight. The handler resets both the moment the
+    // gesture ends (commit or cancel), and the host ignores them whenever the
+    // gesture is not active, so a stale gesture position can never contaminate
+    // a later Settings entry.
+    var backGestureActive by remember { mutableStateOf(false) }
+    var backGestureProgress by remember { mutableFloatStateOf(0f) }
 
     // The background is the only colour the prototype transitions on a theme
     // change; everything else in the palette swaps immediately.
@@ -102,7 +106,8 @@ fun ShakeItApp(
         ) {
             ShakeItNavHost(
                 screen = state.screen,
-                backProgress = backProgress,
+                backGestureActive = backGestureActive,
+                backGestureProgress = backGestureProgress,
                 home = {
                     HomeScreen(
                         torchOn = state.torchOn,
@@ -137,26 +142,31 @@ fun ShakeItApp(
 
         // The prototype's back arrow is the tap-side way out of Settings; the
         // system gesture/button follows the same contract, but on Android 14+
-        // it arrives as a stream of progress events. Those drive the host's
-        // existing transition directly, so the screens track the finger; the
-        // navigation itself is applied only once the system commits, and the
-        // transition then finishes from exactly where the gesture left it
-        // instead of replaying. On a cancelled gesture the progress returns to
-        // 0 and the same springs settle back to Settings. On plain back
-        // presses (and on pre-Android 14 devices) the flow completes empty and
-        // the normal full animation plays, exactly as before.
+        // it arrives as a stream of progress events. While the gesture is in
+        // flight those events are the transition's progress itself (the host
+        // renders them directly, with no animation in between); when the
+        // system commits, the navigation flips and the host's springs settle
+        // into Home from the position the gesture reached, and on cancel they
+        // settle back to Settings. On plain back presses (and on pre-Android
+        // 14 devices) the flow completes empty and the normal full animation
+        // plays, exactly as before.
         PredictiveBackHandler(enabled = state.screen == ShakeItState.Screen.SETTINGS) { progress ->
             try {
-                progress.collect { backProgress = it.progress }
-                // The commit does not necessarily arrive at progress 1f, so
-                // drive the transition to completion explicitly.
-                backProgress = 1f
+                backGestureActive = true
+                progress.collect { backGestureProgress = it.progress }
+                // Committed: flip the navigation; the host finishes the
+                // transition from the gesture's position (the last progress
+                // event is not necessarily 1f, so the settle completes it).
                 state.closeSettings()
             } catch (e: CancellationException) {
-                // Gesture cancelled: restore the progress; the springs settle
-                // back to Settings from their current position.
-                backProgress = 0f
+                // Cancelled: the screen stays Settings and the host settles
+                // back from the preview position on its own.
                 throw e
+            } finally {
+                // The gesture is over, committed or cancelled: drop the
+                // transient state so it cannot affect any later navigation.
+                backGestureActive = false
+                backGestureProgress = 0f
             }
         }
     }
