@@ -97,7 +97,9 @@ val DefaultShakeItSnapshot = ShakeItSnapshot(
     runInBackground = true,
     themeMode = ThemeMode.System,
     dynamicColor = true,
-    activations = 7,
+    // A fresh install has never activated the torch, so the counter starts at
+    // zero — no demo data is seeded.
+    activations = 0,
 )
 
 class ShakeItStore(context: Context) {

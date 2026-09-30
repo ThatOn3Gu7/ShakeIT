@@ -53,9 +53,18 @@
         android:name="android.hardware.sensor.proximity"
         android:required="false" />
 
+    <!--
+      Opt into the platform's on-back-invoked callback path. That is what lets
+      the system's predictive back gesture (Android 14+) stream progress events
+      into the app, which is how the Settings screen previews Home while the
+      edge-swipe is in flight. Apps that do not opt in only ever receive the
+      final back event, with no preview. The attribute is ignored below
+      Android 13, where back keeps using the legacy path.
+    -->
     <application
         android:name=".ShakeItApplication"
         android:allowBackup="true"
+        android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
