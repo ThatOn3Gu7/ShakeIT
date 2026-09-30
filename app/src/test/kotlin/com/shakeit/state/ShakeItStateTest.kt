@@ -37,7 +37,8 @@ class ShakeItStateTest {
         assertEquals(ThemeMode.System, state.themeMode)
         assertTrue(state.dynamicColor)
         assertFalse(state.torchOn)
-        assertEquals(7, state.activations)
+        // A fresh install counts no activations — the app seeds no demo data.
+        assertEquals(0, state.activations)
         assertEquals(ShakeItState.Screen.HOME, state.screen)
     }
 
@@ -71,14 +72,14 @@ class ShakeItStateTest {
 
         state.onTorchStateChanged(true)
         assertTrue(state.torchOn)
-        assertEquals(8, state.activations)
+        assertEquals(1, state.activations)
 
         state.onTorchStateChanged(false)
         assertFalse(state.torchOn)
-        assertEquals("turning off must not count", 8, state.activations)
+        assertEquals("turning off must not count", 1, state.activations)
 
         state.onTorchStateChanged(true)
-        assertEquals(9, state.activations)
+        assertEquals(2, state.activations)
     }
 
     @Test
@@ -89,13 +90,13 @@ class ShakeItStateTest {
         // to every new collector, so an activity recreated while the torch is on
         // must not read as another activation.
         state.onTorchStateChanged(false)
-        assertEquals(7, state.activations)
+        assertEquals(0, state.activations)
 
         state.onTorchStateChanged(true)
         state.onTorchStateChanged(true)
         state.onTorchStateChanged(true)
 
-        assertEquals(8, state.activations)
+        assertEquals(1, state.activations)
     }
 
     @Test
@@ -111,7 +112,7 @@ class ShakeItStateTest {
         // The engine flipped the torch before it bumped this counter, so the
         // screen animating must not flip it back.
         assertFalse("a detected shake must not toggle the torch", state.torchOn)
-        assertEquals(7, state.activations)
+        assertEquals(0, state.activations)
         assertEquals("a real shake is not a request from the button", 0, state.shakeRequest)
     }
 
@@ -127,7 +128,7 @@ class ShakeItStateTest {
         assertEquals(2, state.shakeRequest)
         // The hero flips the torch 380ms into the wobble, not the button itself.
         assertFalse("a shake request must not toggle the torch", state.torchOn)
-        assertEquals(7, state.activations)
+        assertEquals(0, state.activations)
     }
 
     // ------------------------------------------------------------------
@@ -173,7 +174,7 @@ class ShakeItStateTest {
         assertFalse(state.dynamicColor)
         // Nothing above touches the torch.
         assertFalse(state.torchOn)
-        assertEquals(7, state.activations)
+        assertEquals(0, state.activations)
     }
 
     @Test
@@ -229,7 +230,7 @@ class ShakeItStateTest {
         // persisted "on" would be a lie at the next launch, and the blob would
         // spend its first second morphing back to OFF.
         assertFalse(restored.torchOn)
-        assertEquals("but what it did is still counted", 8, restored.activations)
+        assertEquals("but what it did is still counted", 1, restored.activations)
         assertEquals(ShakeGesture.DoubleShake, restored.gesture)
         assertEquals(ThemeMode.Dark, restored.themeMode)
     }
