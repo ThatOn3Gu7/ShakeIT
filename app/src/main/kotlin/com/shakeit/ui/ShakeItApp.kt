@@ -1,33 +1,20 @@
 package com.shakeit.ui
 
-import android.os.Build
-import android.util.Log
-import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import com.shakeit.engine.ShakeItEngine
 import com.shakeit.engine.rememberShakeItEngine
 import com.shakeit.state.ShakeItState
@@ -39,13 +26,7 @@ import com.shakeit.ui.settings.SettingsScreen
 import com.shakeit.ui.splash.ShakeItSplash
 import com.shakeit.ui.theme.ShakeItTheme
 import java.util.concurrent.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-// TEMPORARY DIAGNOSTIC — logcat tag for the predictive-back event flow
-// logging below. Remove this constant together with the logging once it has
-// served its purpose.
-private const val PREDICTIVE_BACK_DIAG_TAG = "ShakeIT-PredictiveBack"
 
 /**
  * Root of the app: resolves the theme, owns the state, mirrors the hardware into
@@ -114,20 +95,6 @@ fun ShakeItApp(
     // a later Settings entry.
     var backGestureActive by remember { mutableStateOf(false) }
     var backGestureProgress by remember { mutableFloatStateOf(0f) }
-    // Temporary on-screen diagnostic state (drives PredictiveBackOverlay);
-    // remove together with the overlay and the logcat logging.
-    var backSwipeEdge by remember { mutableIntStateOf(BackEventCompat.EDGE_NONE) }
-    var backOutcome by remember { mutableStateOf<String?>(null) }
-    var showBackDiag by remember { mutableStateOf(false) }
-
-    // Temporary diagnostic: keep the on-screen readout up briefly after the
-    // gesture ends so the final COMMIT/CANCEL is readable without any tooling.
-    LaunchedEffect(backGestureActive) {
-        if (!backGestureActive) {
-            delay(1200)
-            if (!backGestureActive) showBackDiag = false
-        }
-    }
 
     // The background is the only colour the prototype transitions on a theme
     // change; everything else in the palette swaps immediately.
@@ -171,16 +138,6 @@ fun ShakeItApp(
             if (showSplash.value) {
                 ShakeItSplash(onFinished = { showSplash.value = false })
             }
-            if (showBackDiag) {
-                PredictiveBackOverlay(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(12.dp),
-                    progress = backGestureProgress,
-                    swipeEdge = backSwipeEdge,
-                    outcome = backOutcome,
-                )
-            }
         }
 
         // The prototype's back arrow is the tap-side way out of Settings; the
@@ -193,39 +150,17 @@ fun ShakeItApp(
         // settle back to Settings. On plain back presses (and on pre-Android
         // 14 devices) the flow completes empty and the normal full animation
         // plays, exactly as before.
-        // ------------------------------------------------------------------
-        // TEMPORARY DIAGNOSTIC — this logging exists to answer exactly one
-        // question: does the platform deliver BackEventCompat progress events
-        // to this app during the system edge-back gesture? It changes no
-        // behavior of the handler: the same flow is collected, the same
-        // commit/cancel handling runs. Remove it once the event flow has been
-        // verified on-device.
-        // ------------------------------------------------------------------
         PredictiveBackHandler(enabled = state.screen == ShakeItState.Screen.SETTINGS) { progress ->
-            Log.d(PREDICTIVE_BACK_DIAG_TAG, "handler invoked: back operation started (enabled while Settings is shown; device API ${Build.VERSION.SDK_INT})")
-            // Temporary on-screen diagnostic: show the readout for this gesture.
-            backOutcome = null
-            showBackDiag = true
             try {
                 backGestureActive = true
                 progress.collect { event ->
-                    Log.d(
-                        PREDICTIVE_BACK_DIAG_TAG,
-                        "progress event: progress=${event.progress} swipeEdge=${event.swipeEdge} " +
-                            "(0=left, 1=right, 2=not-an-edge-swipe) touchX=${event.touchX} touchY=${event.touchY}",
-                    )
                     backGestureProgress = event.progress
-                    backSwipeEdge = event.swipeEdge
                 }
-                Log.d(PREDICTIVE_BACK_DIAG_TAG, "flow completed normally → COMMIT")
-                backOutcome = "COMMIT"
                 // Committed: flip the navigation; the host finishes the
                 // transition from the gesture's position (the last progress
                 // event is not necessarily 1f, so the settle completes it).
                 state.closeSettings()
             } catch (e: CancellationException) {
-                Log.d(PREDICTIVE_BACK_DIAG_TAG, "flow cancelled via CancellationException → CANCEL")
-                backOutcome = "CANCEL"
                 // Cancelled: the screen stays Settings and the host settles
                 // back from the preview position on its own.
                 throw e
@@ -235,62 +170,6 @@ fun ShakeItApp(
                 backGestureActive = false
                 backGestureProgress = 0f
             }
-        }
-    }
-}
-
-/**
- * TEMPORARY diagnostic overlay — shows, with no external tooling, whether the
- * system's predictive-back gesture is delivering BackEventCompat progress to
- * the app and what the handler did with it. Visible only while a back
- * operation from Settings is in flight, plus a short moment afterwards so the
- * final outcome is readable. Remove this composable together with the
- * diagnostic state and the logcat logging once the event flow has been
- * verified on-device.
- */
-@Composable
-private fun PredictiveBackOverlay(
-    modifier: Modifier,
-    progress: Float,
-    swipeEdge: Int,
-    outcome: String?,
-) {
-    val edgeLabel = when (swipeEdge) {
-        BackEventCompat.EDGE_LEFT -> "left"
-        BackEventCompat.EDGE_RIGHT -> "right"
-        BackEventCompat.EDGE_NONE -> "not-an-edge-swipe"
-        else -> "unknown"
-    }
-    Box(
-        modifier = modifier
-            .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-    ) {
-        Column {
-            Text(
-                text = "Predictive Back: " + (outcome ?: "ACTIVE"),
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-            )
-            Text(
-                text = "progress = %.3f".format(progress),
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-            )
-            Text(
-                text = "swipeEdge = $swipeEdge ($edgeLabel)",
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-            )
-            Text(
-                text = "device API = ${Build.VERSION.SDK_INT}",
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-            )
         }
     }
 }
